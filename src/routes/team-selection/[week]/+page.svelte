@@ -1,4 +1,3 @@
-// src/routes/team-selection/[week]/+page.svelte
 <script lang="ts">
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
