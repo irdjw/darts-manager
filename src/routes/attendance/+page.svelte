@@ -1,3 +1,4 @@
+// src/routes/attendance/+page.svelte
 <script lang="ts">
   import { onMount } from 'svelte';
   import { teamStore, allPlayers, weeklyAttendance } from '$lib/stores/teamManagement';
@@ -109,27 +110,33 @@
     <div class="bg-white rounded-lg shadow-lg p-4 md:p-6 mb-6">
       <h2 class="text-lg font-semibold text-gray-900 mb-4">Attendance Summary</h2>
       
-      {@const attendingCount = Array.from(attendance.values()).filter(Boolean).length}
-      {@const totalPlayers = $allPlayers.length}
-      
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div class="text-center">
-          <p class="text-2xl font-bold text-green-600">{attendingCount}</p>
-          <p class="text-sm text-gray-500">Attending</p>
+      {#if $allPlayers.length > 0}
+        {@const attendingCount = Array.from(attendance.values()).filter(Boolean).length}
+        {@const totalPlayers = $allPlayers.length}
+        
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="text-center">
+            <p class="text-2xl font-bold text-green-600">{attendingCount}</p>
+            <p class="text-sm text-gray-500">Attending</p>
+          </div>
+          <div class="text-center">
+            <p class="text-2xl font-bold text-red-600">{totalPlayers - attendingCount}</p>
+            <p class="text-sm text-gray-500">Unavailable</p>
+          </div>
+          <div class="text-center">
+            <p class="text-2xl font-bold text-blue-600">{totalPlayers}</p>
+            <p class="text-sm text-gray-500">Total Players</p>
+          </div>
+          <div class="text-center">
+            <p class="text-2xl font-bold text-purple-600">7</p>
+            <p class="text-sm text-gray-500">Team Size</p>
+          </div>
         </div>
-        <div class="text-center">
-          <p class="text-2xl font-bold text-red-600">{totalPlayers - attendingCount}</p>
-          <p class="text-sm text-gray-500">Unavailable</p>
+      {:else}
+        <div class="text-center py-4">
+          <p class="text-gray-500">Loading attendance data...</p>
         </div>
-        <div class="text-center">
-          <p class="text-2xl font-bold text-blue-600">{totalPlayers}</p>
-          <p class="text-sm text-gray-500">Total Players</p>
-        </div>
-        <div class="text-center">
-          <p class="text-2xl font-bold text-purple-600">7</p>
-          <p class="text-sm text-gray-500">Team Size</p>
-        </div>
-      </div>
+      {/if}
     </div>
     
     <!-- Player attendance list -->

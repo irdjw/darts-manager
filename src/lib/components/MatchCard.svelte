@@ -1,4 +1,4 @@
-// src/lib/components/MatchCard.svelte
+/ src/lib/components/MatchCard.svelte
 <script lang="ts">
   import type { Fixture } from '$lib/types/dashboard';
   import { formatDate, getVenueDisplay } from '$lib/utils/formatting';

@@ -1,3 +1,4 @@
+// src/lib/components/LoadingSpinner.svelte
 <script lang="ts">
   export let message: string = 'Loading...';
   export let size: 'sm' | 'md' | 'lg' = 'md';

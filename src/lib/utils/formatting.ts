@@ -14,3 +14,4 @@ export function getVenueDisplay(venue: 'home' | 'away'): string {
 
 export function calculateWinPercentage(won: number, total: number): number {
   return total > 0 ? Math.round((won / total) * 100) : 0;
+}

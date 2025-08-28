@@ -1,4 +1,4 @@
-xport const allPlayers = writable<Player[]>([]);
+export const allPlayers = writable<Player[]>([]);
 export const weeklyAttendance = writable<AttendanceRecord[]>([]);
 export const currentSelection = writable<TeamSelection | null>(null);
 export const selectionWeek = writable<number>(1);

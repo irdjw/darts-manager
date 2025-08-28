@@ -1,4 +1,3 @@
-// src/lib/types/dashboard.ts
 export interface Fixture {
   id: string;
   week_number: number;

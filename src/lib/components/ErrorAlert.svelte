@@ -1,3 +1,4 @@
+// src/lib/components/ErrorAlert.svelte
 <script lang="ts">
   export let message: string;
   export let onClose: (() => void) | undefined = undefined;
