@@ -6,7 +6,8 @@
   import { auth, isAuthenticated, userRole, isLoading } from '../stores/auth';
   import { canAccessRoute } from '../utils/permissions';
   
-  export let requiredPermission: string | null = null;
+  import type { Permission } from '../utils/permissions';
+  export let requiredPermission: keyof Permission | null = null;
   export let fallbackRoute: string = '/login';
 
   let hasAccess = false;
