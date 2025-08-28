@@ -1,7 +1,7 @@
 <!-- src/lib/components/UserManager.svelte -->
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { supabase } from '$lib/database/supabase'; from '../database/supabase';
+  import { supabase } from '$lib/database/supabase';
   import { userRole } from '../stores/auth';
   import { getPermissions, USER_ROLES } from '../utils/permissions';
   import type { UserRole } from '../database/types';
@@ -25,23 +25,44 @@
   onMount(() => {
     if (permissions.canManageUsers) {
       loadUsers();
+    } else {
+      error = 'Insufficient permissions to manage users';
+      loading = false;
     }
   });
 
   async function loadUsers() {
     try {
       loading = true;
+      error = '';
       
-      // Get users from auth.users (admin only operation)
-      const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
-      if (authError) throw authError;
+      // Test Supabase connection first
+      const { data: connectionTest } = await supabase
+        .from('user_roles')
+        .select('count')
+        .limit(1);
+      
+      if (!connectionTest) {
+        throw new Error('Unable to connect to Supabase database');
+      }
 
-      // Get user roles
+      // Get users from auth.users (requires service_role key for admin operations)
+      const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
+      
+      if (authError) {
+        console.error('Auth admin error:', authError);
+        throw new Error('Unable to fetch user list. Check Supabase service role permissions.');
+      }
+
+      // Get user roles with error handling
       const { data: roleData, error: roleError } = await supabase
         .from('user_roles')
         .select('user_id, role');
       
-      if (roleError) throw roleError;
+      if (roleError) {
+        console.error('Role fetch error:', roleError);
+        throw new Error('Unable to fetch user roles from database');
+      }
 
       // Combine data
       const roleMap = new Map(roleData?.map(r => [r.user_id, r.role]) || []);
@@ -51,12 +72,13 @@
         email: user.email || 'No email',
         role: roleMap.get(user.id) || 'player',
         created_at: user.created_at,
-        last_sign_in_at: user.last_sign_in_at
+        last_sign_in_at: user.last_sign_in_at ?? null
       }));
 
-      error = '';
     } catch (err: any) {
+      console.error('Load users error:', err);
       error = err.message || 'Failed to load users';
+      users = [];
     } finally {
       loading = false;
     }
@@ -64,18 +86,34 @@
 
   async function updateUserRole(userId: string, newRole: UserRole['role']) {
     try {
+      error = '';
+      
+      // Test database connection
+      const { error: testError } = await supabase
+        .from('user_roles')
+        .select('id')
+        .limit(1);
+      
+      if (testError) {
+        throw new Error('Database connection failed');
+      }
+
       // Check if user role exists
-      const { data: existing } = await supabase
+      const { data: existing, error: existingError } = await supabase
         .from('user_roles')
         .select('id')
         .eq('user_id', userId)
         .single();
 
+      if (existingError && existingError.code !== 'PGRST116') {
+        throw existingError;
+      }
+
       if (existing) {
         // Update existing role
         const { error } = await supabase
           .from('user_roles')
-          .update({ role: newRole })
+          .update({ role: newRole, updated_at: new Date().toISOString() })
           .eq('user_id', userId);
         
         if (error) throw error;
@@ -83,7 +121,12 @@
         // Insert new role
         const { error } = await supabase
           .from('user_roles')
-          .insert({ user_id: userId, role: newRole });
+          .insert({ 
+            user_id: userId, 
+            role: newRole,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
         
         if (error) throw error;
       }
@@ -94,6 +137,7 @@
       selectedUser = null;
 
     } catch (err: any) {
+      console.error('Update role error:', err);
       error = err.message || 'Failed to update user role';
     }
   }
@@ -101,6 +145,7 @@
   function openRoleModal(user: UserWithRole) {
     selectedUser = user;
     showRoleModal = true;
+    error = '';
   }
 
   function getRoleDisplay(role: string): string {
@@ -151,16 +196,26 @@
       </div>
       <button
         on:click={loadUsers}
-        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md 
-               font-medium transition-colours min-h-[44px]"
+        disabled={loading}
+        class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-md 
+               font-medium transition-colors min-h-[44px]"
       >
+        {#if loading}
+          <div class="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent inline-block mr-2"></div>
+        {/if}
         🔄 Refresh
       </button>
     </div>
 
     {#if error}
       <div class="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
-        <p class="text-red-800">{error}</p>
+        <div class="flex items-center">
+          <div class="text-red-500 mr-2">⚠️</div>
+          <div>
+            <p class="text-red-800 font-medium">Database Connection Error</p>
+            <p class="text-red-700 text-sm mt-1">{error}</p>
+          </div>
+        </div>
       </div>
     {/if}
 
@@ -168,6 +223,12 @@
       <div class="flex justify-center items-center h-32">
         <div class="animate-spin rounded-full h-8 w-8 border-2 border-blue-500 border-t-transparent"></div>
         <span class="ml-2 text-gray-600">Loading users...</span>
+      </div>
+    {:else if users.length === 0 && !error}
+      <div class="text-center p-8">
+        <div class="text-gray-400 text-4xl mb-4">👥</div>
+        <h3 class="text-lg font-medium text-gray-900 mb-2">No Users Found</h3>
+        <p class="text-gray-600">No users are currently registered in the system.</p>
       </div>
     {:else}
       <!-- Users Table -->
@@ -215,9 +276,9 @@
                       disabled={!permissions.canAssignRoles && user.role === USER_ROLES.SUPER_ADMIN}
                       class="bg-gray-100 hover:bg-gray-200 disabled:bg-gray-50 disabled:text-gray-400
                              text-gray-700 px-3 py-1 rounded text-sm font-medium 
-                             transition-colours min-h-[32px]"
+                             transition-colors min-h-[32px]"
                     >
-                      Change Role
+                      Edit Role
                     </button>
                   </td>
                 </tr>
@@ -228,72 +289,62 @@
       </div>
     {/if}
 
-    <!-- Role Change Modal -->
+    <!-- Role Assignment Modal -->
     {#if showRoleModal && selectedUser}
-      <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-        <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-          <h3 class="text-lg font-semibold text-gray-900 mb-4">
-            Change Role for {selectedUser.email}
+      <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+          <h3 class="text-lg font-medium text-gray-900 mb-4">
+            Update Role for {selectedUser.email}
           </h3>
           
-          <p class="text-gray-600 mb-6">
-            Current role: <span class="font-medium">{getRoleDisplay(selectedUser.role)}</span>
-          </p>
-
-          <div class="space-y-3 mb-6">
-            {#each Object.values(USER_ROLES) as role}
-              {#if permissions.canAssignRoles || role !== USER_ROLES.SUPER_ADMIN}
-                <label class="flex items-center p-3 border rounded-md hover:bg-gray-50 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="role"
-                    value={role}
-                    checked={role === selectedUser.role}
-                    class="mr-3"
-                  />
-                  <div class="flex-1">
-                    <div class="font-medium">{getRoleDisplay(role)}</div>
-                    <div class="text-sm text-gray-600">
-                      {#if role === USER_ROLES.SUPER_ADMIN}
-                        Full system access including data reset
-                      {:else if role === USER_ROLES.ADMIN}
-                        Manage players, fixtures, view all statistics
-                      {:else if role === USER_ROLES.CAPTAIN}
-                        Team selection, mark attendance, record results
-                      {:else}
-                        View stats, record own game results
-                      {/if}
-                    </div>
-                  </div>
-                </label>
-              {/if}
-            {/each}
-          </div>
-
-          <div class="flex space-x-3">
-            <button
-              on:click={() => {
-                const form = document.querySelector('input[name="role"]:checked') as HTMLInputElement;
-                if (form && selectedUser) {
-                  updateUserRole(selectedUser.id, form.value as UserRole['role']);
-                }
-              }}
-              class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 
-                     rounded-md font-medium transition-colours min-h-[44px]"
-            >
-              Update Role
-            </button>
-            <button
-              on:click={() => {
-                showRoleModal = false;
-                selectedUser = null;
-              }}
-              class="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2
-                     rounded-md font-medium transition-colours min-h-[44px]"
-            >
-              Cancel
-            </button>
-          </div>
+          <form on:submit|preventDefault={(e) => {
+            const form = e.target as HTMLFormElement;
+            const formData = new FormData(form);
+            const newRole = formData.get('role') as UserRole['role'];
+            if (newRole && selectedUser) {
+              updateUserRole(selectedUser.id, newRole);
+            }
+          }}>
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                Select Role
+              </label>
+              <select 
+                name="role" 
+                value={selectedUser.role}
+                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value={USER_ROLES.PLAYER}>🎯 Player</option>
+                <option value={USER_ROLES.CAPTAIN}>⚡ Captain</option>
+                {#if permissions.canAssignRoles}
+                  <option value={USER_ROLES.ADMIN}>🔧 Admin</option>
+                  <option value={USER_ROLES.SUPER_ADMIN}>👑 Super Admin</option>
+                {/if}
+              </select>
+            </div>
+            
+            <div class="flex space-x-3">
+              <button
+                type="submit"
+                class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 
+                       rounded-md font-medium transition-colors min-h-[44px]"
+              >
+                Update Role
+              </button>
+              <button
+                type="button"
+                on:click={() => {
+                  showRoleModal = false;
+                  selectedUser = null;
+                  error = '';
+                }}
+                class="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2
+                       rounded-md font-medium transition-colors min-h-[44px]"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     {/if}

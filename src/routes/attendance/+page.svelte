@@ -1,40 +1,122 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  
-  let loading = true;
+  import { supabase } from '$lib/database/supabase';
+  import { DashboardService } from '$lib/stores/dashboard';
+  import type { Player } from '$lib/database/types';
+
+  let players: Player[] = [];
+  let attendance = new Map<string, boolean>();
   let currentWeek = 1;
-  let attendance = new Map();
+  let loading = true;
+  let saving = false;
   let hasChanges = false;
-  
-  let players = [
-    { id: '1', name: 'Tracey', win_percentage: 75, drop_week: null },
-    { id: '2', name: 'Jordan', win_percentage: 68, drop_week: null },
-    { id: '3', name: 'Taffy', win_percentage: 82, drop_week: null },
-    { id: '4', name: 'Ross', win_percentage: 71, drop_week: null },
-    { id: '5', name: 'Layton', win_percentage: 65, drop_week: null }
-  ];
-  
+  let error = '';
+
+  const dashboardService = new DashboardService();
+
   onMount(() => {
-    players.forEach(player => {
-      attendance.set(player.id, true);
-    });
-    attendance = attendance;
-    loading = false;
+    loadData();
   });
-  
-  function toggleAttendance(playerId) {
-    const current = attendance.get(playerId) || false;
+
+  async function loadData() {
+    try {
+      loading = true;
+      error = '';
+
+      // Test Supabase connection
+      const { error: connectionError } = await supabase
+        .from('players')
+        .select('count')
+        .limit(1);
+
+      if (connectionError) {
+        throw new Error('Database connection failed: ' + connectionError.message);
+      }
+
+      // Get current week
+      currentWeek = await dashboardService.getCurrentWeek();
+
+      // Load all players
+      const { data: playersData, error: playersError } = await supabase
+        .from('players')
+        .select('*')
+        .eq('active', true)
+        .order('name');
+
+      if (playersError) {
+        throw new Error('Failed to load players: ' + playersError.message);
+      }
+
+      players = playersData || [];
+
+      // Load existing attendance for current week
+      const { data: attendanceData, error: attendanceError } = await supabase
+        .from('attendance')
+        .select('player_id, available')
+        .eq('week_number', currentWeek)
+        .eq('league_year', '2025/26');
+
+      if (attendanceError && attendanceError.code !== 'PGRST116') {
+        throw new Error('Failed to load attendance: ' + attendanceError.message);
+      }
+
+      // Initialize attendance map
+      attendance = new Map();
+      players.forEach(player => {
+        const existingRecord = attendanceData?.find(a => a.player_id === player.id);
+        attendance.set(player.id, existingRecord?.available ?? true);
+      });
+
+      attendance = attendance; // Trigger reactivity
+
+    } catch (err: any) {
+      console.error('Load data error:', err);
+      error = err.message || 'Failed to load data';
+    } finally {
+      loading = false;
+    }
+  }
+
+  function toggleAttendance(playerId: string) {
+    const current = attendance.get(playerId) ?? true;
     attendance.set(playerId, !current);
     attendance = attendance;
     hasChanges = true;
   }
-  
+
   async function saveAttendance() {
-    loading = true;
-    // Simulate save
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    hasChanges = false;
-    loading = false;
+    try {
+      saving = true;
+      error = '';
+
+      // Prepare attendance records
+      const records = players.map(player => ({
+        player_id: player.id,
+        week_number: currentWeek,
+        league_year: '2025/26',
+        available: attendance.get(player.id) ?? true,
+        marked_at: new Date().toISOString()
+      }));
+
+      // Save to database
+      const { error: saveError } = await supabase
+        .from('attendance')
+        .upsert(records, {
+          onConflict: 'player_id,week_number,league_year'
+        });
+
+      if (saveError) {
+        throw new Error('Failed to save attendance: ' + saveError.message);
+      }
+
+      hasChanges = false;
+
+    } catch (err: any) {
+      console.error('Save attendance error:', err);
+      error = err.message || 'Failed to save attendance';
+    } finally {
+      saving = false;
+    }
   }
 </script>
 
@@ -53,101 +135,86 @@
       {#if hasChanges}
         <button
           on:click={saveAttendance}
-          disabled={loading}
-          class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg 
-                 font-medium min-h-[44px] disabled:opacity-50"
+          disabled={saving}
+          class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg 
+                 font-medium transition-colors min-h-[44px] flex items-center"
         >
-          {loading ? 'Saving...' : 'Save Changes'}
+          {#if saving}
+            <div class="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+          {/if}
+          Save Changes
         </button>
       {/if}
     </div>
   </header>
 
-  <main class="px-4 py-6">
-    <!-- Summary -->
-    <div class="bg-white rounded-lg shadow-lg p-4 mb-6">
-      <h2 class="text-lg font-semibold text-gray-900 mb-4">Attendance Summary</h2>
-      
-      {#if players.length > 0}
-        {@const attendingCount = Array.from(attendance.values()).filter(Boolean).length}
-        {@const totalPlayers = players.length}
-        
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div class="text-center">
-            <p class="text-2xl font-bold text-green-600">{attendingCount}</p>
-            <p class="text-sm text-gray-500">Attending</p>
-          </div>
-          <div class="text-center">
-            <p class="text-2xl font-bold text-red-600">{totalPlayers - attendingCount}</p>
-            <p class="text-sm text-gray-500">Unavailable</p>
-          </div>
-          <div class="text-center">
-            <p class="text-2xl font-bold text-blue-600">{totalPlayers}</p>
-            <p class="text-sm text-gray-500">Total Players</p>
-          </div>
-          <div class="text-center">
-            <p class="text-2xl font-bold text-purple-600">7</p>
-            <p class="text-sm text-gray-500">Team Size</p>
+  <main class="p-4">
+    {#if error}
+      <div class="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
+        <div class="flex items-center">
+          <div class="text-red-500 mr-2">⚠️</div>
+          <div>
+            <p class="text-red-800 font-medium">Error</p>
+            <p class="text-red-700 text-sm mt-1">{error}</p>
           </div>
         </div>
-      {/if}
-    </div>
-    
-    <!-- Player List -->
-    <div class="space-y-3">
-      <h2 class="text-lg font-semibold text-gray-900">Mark Attendance</h2>
-      
-      {#each players as player}
-        {@const isAttending = attendance.get(player.id) || false}
-        {@const isDropped = player.drop_week === currentWeek}
-        
-        <div class="bg-white rounded-lg shadow-lg p-4">
-          <button
-            class="w-full flex items-center justify-between min-h-[60px]"
-            on:click={() => !isDropped && toggleAttendance(player.id)}
-            disabled={isDropped}
-          >
-            <div class="flex items-center space-x-4">
-              <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                <span class="text-blue-600 font-semibold">
-                  {player.name.charAt(0)}
-                </span>
-              </div>
-              <div class="text-left">
-                <h3 class="font-medium text-gray-900">{player.name}</h3>
-                <p class="text-sm text-gray-500">
-                  {isDropped ? 'Must sit out' : `${player.win_percentage}% win rate`}
-                </p>
-              </div>
-            </div>
-            
-            <div class="flex items-center space-x-3">
-              {#if isDropped}
-                <span class="bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm font-medium">
-                  Dropped
-                </span>
-              {:else}
-                <label class="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    class="sr-only peer"
-                    checked={isAttending}
-                    on:change={() => toggleAttendance(player.id)}
-                  />
-                  <div class="w-11 h-6 bg-gray-200 rounded-full peer 
-                              peer-checked:after:translate-x-full peer-checked:after:border-white 
-                              after:content-[''] after:absolute after:top-[2px] after:left-[2px] 
-                              after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all 
-                              peer-checked:bg-green-600"></div>
-                </label>
-                <span class="text-sm font-medium {isAttending ? 'text-green-600' : 'text-gray-500'}">
-                  {isAttending ? 'Available' : 'Unavailable'}
-                </span>
-              {/if}
-            </div>
-          </button>
+      </div>
+    {/if}
+
+    {#if loading}
+      <div class="flex justify-center items-center h-32">
+        <div class="animate-spin rounded-full h-8 w-8 border-2 border-blue-500 border-t-transparent"></div>
+        <span class="ml-2 text-gray-600">Loading attendance data...</span>
+      </div>
+    {:else if players.length === 0}
+      <div class="text-center p-8">
+        <div class="text-gray-400 text-4xl mb-4">👥</div>
+        <h3 class="text-lg font-medium text-gray-900 mb-2">No Players Found</h3>
+        <p class="text-gray-600">No active players found in the database.</p>
+      </div>
+    {:else}
+      <div class="bg-white rounded-lg shadow">
+        <div class="p-4 border-b border-gray-200">
+          <h2 class="text-lg font-medium text-gray-900">Player Availability</h2>
+          <p class="text-sm text-gray-600">Mark players as available or unavailable for this week</p>
         </div>
-      {/each}
-    </div>
+        
+        <div class="divide-y divide-gray-200">
+          {#each players as player (player.id)}
+            {@const isAvailable = attendance.get(player.id) ?? true}
+            <div class="flex items-center justify-between p-4 hover:bg-gray-50">
+              <div class="flex items-center">
+                <div class="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                  <span class="text-sm font-medium text-blue-600">
+                    {player.name.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+                <div class="ml-3">
+                  <div class="text-sm font-medium text-gray-900">{player.name}</div>
+                  <div class="text-xs text-gray-500">
+                    Win Rate: {player.win_percentage}% | Games: {player.games_played}
+                  </div>
+                </div>
+              </div>
+              
+              <button
+                on:click={() => toggleAttendance(player.id)}
+                class="flex items-center space-x-2 px-3 py-2 rounded-md transition-colors min-h-[44px]
+                       {isAvailable 
+                         ? 'bg-green-100 text-green-800 hover:bg-green-200' 
+                         : 'bg-red-100 text-red-800 hover:bg-red-200'}"
+              >
+                <span class="text-lg">
+                  {isAvailable ? '✅' : '❌'}
+                </span>
+                <span class="text-sm font-medium">
+                  {isAvailable ? 'Available' : 'Unavailable'}
+                </span>
+              </button>
+            </div>
+          {/each}
+        </div>
+      </div>
+    {/if}
   </main>
 </div>
