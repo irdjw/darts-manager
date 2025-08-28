@@ -1,69 +1,150 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { goto } from '$app/navigation';
-  import { isAuthenticated, isLoading } from '$lib/stores/auth';
+  import { DashboardService } from '$lib/services/dashboardService';
+  import QuickActions from '$lib/components/QuickActions.svelte';
+  import type { Fixture, DashboardStats } from '$lib/types/dashboard';
   
-  onMount(() => {
-    // Redirect authenticated users to dashboard
-    if ($isAuthenticated) {
-      goto('/dashboard', { replaceState: true });
+  let loading = true;
+  let error = '';
+  let currentFixture: Fixture | null = null;
+  let stats: DashboardStats | null = null;
+  
+  const dashboardService = new DashboardService();
+  
+  onMount(async () => {
+    try {
+      loading = true;
+      error = '';
+      
+      // Fetch real data from Supabase
+      const [fixtureData, statsData] = await Promise.all([
+        dashboardService.getCurrentFixture(),
+        dashboardService.getSeasonStats()
+      ]);
+      
+      currentFixture = fixtureData;
+      stats = statsData;
+      
+      console.log('Dashboard data loaded:', { currentFixture, stats });
+      
+    } catch (err: any) {
+      console.error('Dashboard load error:', err);
+      error = err.message || 'Failed to load dashboard data';
+    } finally {
+      loading = false;
     }
   });
-  
-  // Reactive redirect when auth state changes
-  $: if (!$isLoading && $isAuthenticated) {
-    goto('/dashboard', { replaceState: true });
-  }
 </script>
 
 <svelte:head>
-  <title>Isaac Wilson Darts Team</title>
+  <title>Dashboard - Isaac Wilson Darts Team</title>
 </svelte:head>
 
-{#if $isLoading}
-  <!-- Loading state -->
-  <div class="min-h-screen flex items-center justify-center bg-gray-50">
-    <div class="text-center">
-      <div class="text-6xl mb-4">🎯</div>
-      <div class="animate-spin rounded-full h-8 w-8 border-2 border-blue-500 border-t-transparent mx-auto mb-4"></div>
-      <p class="text-gray-600">Loading Isaac Wilson Darts...</p>
-    </div>
-  </div>
-{:else if !$isAuthenticated}
-  <!-- Landing page for unauthenticated users -->
-  <div class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-    <div class="max-w-md w-full mx-4">
-      <div class="text-center mb-8">
-        <div class="text-8xl mb-4">🎯</div>
-        <h1 class="text-3xl font-bold text-gray-900 mb-2">Isaac Wilson Darts Team</h1>
-        <p class="text-gray-600">Team management system</p>
-      </div>
-      
-      <div class="bg-white rounded-2xl shadow-lg p-6 space-y-4">
-        <h2 class="text-xl font-semibold text-gray-900 text-center">Welcome Back</h2>
-        <p class="text-gray-600 text-center text-sm">Please sign in to access the team dashboard</p>
-        
-        <a 
-          href="/login"
-          class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-lg 
-                 font-medium transition-all min-h-[44px] flex items-center justify-center"
-        >
-          Sign In
-        </a>
-        
-        <div class="pt-4 border-t border-gray-200">
-          <div class="grid grid-cols-2 gap-4 text-center">
-            <div class="p-3 bg-gray-50 rounded-lg">
-              <div class="text-2xl font-bold text-blue-600">7</div>
-              <div class="text-xs text-gray-500">Team Size</div>
-            </div>
-            <div class="p-3 bg-gray-50 rounded-lg">
-              <div class="text-2xl font-bold text-green-600">38</div>
-              <div class="text-xs text-gray-500">Fixtures</div>
-            </div>
-          </div>
+<div class="min-h-screen bg-gray-50 pb-16">
+  <header class="bg-white shadow-sm border-b border-gray-200 px-4 py-4">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+          <span class="text-white text-sm font-bold">IW</span>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold text-gray-900">Dashboard</h1>
+          <p class="text-sm text-gray-500">Isaac Wilson Darts Team</p>
         </div>
       </div>
     </div>
-  </div>
-{/if}
+  </header>
+
+  <main class="px-4 py-6">
+    {#if loading}
+      <div class="flex items-center justify-center py-8">
+        <div class="animate-spin rounded-full h-8 w-8 border-2 border-blue-500 border-t-transparent"></div>
+        <span class="ml-3 text-gray-600">Loading dashboard...</span>
+      </div>
+    {:else if error}
+      <div class="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
+        <div class="flex items-center">
+          <div class="text-red-400 mr-3">⚠️</div>
+          <p class="text-sm text-red-800">{error}</p>
+        </div>
+      </div>
+    {:else}
+      <div class="space-y-6">
+        <!-- Next Match -->
+        <section>
+          <h2 class="text-lg font-semibold text-gray-900 mb-3">Next Match</h2>
+          {#if currentFixture}
+            <div class="bg-white p-4 rounded-lg shadow-lg">
+              <div class="flex justify-between items-start">
+                <div>
+                  <h3 class="text-lg font-semibold text-gray-900">Week {currentFixture.week_number}</h3>
+                  <p class="text-gray-700 font-medium">vs {currentFixture.opposition || 'TBD'}</p>
+                  <p class="text-sm text-gray-500 mt-1">
+                    {currentFixture.match_date ? new Date(currentFixture.match_date).toLocaleDateString('en-GB') : 'Date TBD'} • 
+                    {currentFixture.venue === 'home' ? 'Home' : 'Away'}
+                  </p>
+                </div>
+                <span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+                  Upcoming
+                </span>
+              </div>
+            </div>
+          {:else}
+            <div class="bg-white p-4 rounded-lg shadow-lg">
+              <p class="text-gray-500 text-center">No upcoming fixtures found</p>
+            </div>
+          {/if}
+        </section>
+        
+        <!-- Quick Actions -->
+        <section>
+          <h2 class="text-lg font-semibold text-gray-900 mb-3">Quick Actions</h2>
+          <QuickActions />
+        </section>
+        
+        <!-- Stats -->
+        <section>
+          <h2 class="text-lg font-semibold text-gray-900 mb-3">Season Overview</h2>
+          {#if stats}
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div class="bg-white p-4 rounded-lg shadow-lg text-center">
+                <h3 class="text-lg font-semibold text-gray-900">League Position</h3>
+                <p class="text-3xl font-bold text-blue-600">{stats.current_position}</p>
+              </div>
+              
+              <div class="bg-white p-4 rounded-lg shadow-lg text-center">
+                <h3 class="text-lg font-semibold text-gray-900">Win Rate</h3>
+                <p class="text-3xl font-bold text-green-600">{stats.win_percentage}%</p>
+              </div>
+              
+              <div class="bg-white p-4 rounded-lg shadow-lg text-center">
+                <h3 class="text-lg font-semibold text-gray-900">Games Record</h3>
+                <p class="text-lg text-gray-700">{stats.games_won}W - {stats.games_lost}L</p>
+              </div>
+            </div>
+            
+            <!-- Additional Stats -->
+            <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="bg-white p-4 rounded-lg shadow-lg">
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">Remaining Fixtures</h3>
+                <p class="text-2xl font-bold text-orange-600">{stats.remaining_fixtures}</p>
+              </div>
+              
+              <div class="bg-white p-4 rounded-lg shadow-lg">
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">Top Performer</h3>
+                <p class="text-lg text-gray-700">{stats.top_performer?.name || 'N/A'}</p>
+                {#if stats.top_performer?.win_percentage}
+                  <p class="text-sm text-gray-500">{stats.top_performer.win_percentage}% win rate</p>
+                {/if}
+              </div>
+            </div>
+          {:else}
+            <div class="bg-white p-4 rounded-lg shadow-lg">
+              <p class="text-gray-500 text-center">No season statistics available</p>
+            </div>
+          {/if}
+        </section>
+      </div>
+    {/if}
+  </main>
+</div>
