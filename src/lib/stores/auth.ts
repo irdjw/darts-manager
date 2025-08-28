@@ -170,8 +170,10 @@ function getRedirectPath(userRole: UserRole['role'] | null): string {
 
 export const auth = createAuthStore();
 
-// Only setup auth listener in browser
 if (browser) {
+  // Auto-initialize when the store is created
+  auth.init();
+  
   supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session) => {
     console.log('Auth: State change event:', event);
     
@@ -184,7 +186,6 @@ if (browser) {
     }
   });
 }
-
 export const user = derived(auth, $auth => $auth.user);
 export const userRole = derived(auth, $auth => $auth.userRole);
 export const isAuthenticated = derived(auth, $auth => !!$auth.user);
