@@ -106,30 +106,20 @@ export class DashboardService {
     return data || [];
   }
   
-  async saveAttendance(records: Partial<AttendanceRecord>[]): Promise<void> {
+  async markAttendance(playerId: string, weekNumber: number, attended: boolean): Promise<void> {
     const { error } = await supabase
       .from('attendance')
-      .upsert(records, { 
-        onConflict: 'player_id,week_number,league_year'
+      .upsert({
+        player_id: playerId,
+        week_number: weekNumber,
+        league_year: '2025/26',
+        attended
       });
     
     if (error) {
-      console.error('Error saving attendance:', error);
-      throw new Error('Failed to save attendance');
+      console.error('Error marking attendance:', error);
+      throw new Error('Failed to update attendance');
     }
-  }
-  
-  async getCurrentWeek(): Promise<number> {
-    const { data } = await supabase
-      .from('fixtures')
-      .select('week_number')
-      .eq('league_year', '2025/26')
-      .eq('status', 'to_play')
-      .order('week_number', { ascending: true })
-      .limit(1)
-      .single();
-    
-    return data?.week_number || 1;
   }
 }
 
