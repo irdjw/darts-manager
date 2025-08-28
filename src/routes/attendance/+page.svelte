@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { supabase } from '$lib/database/supabase';
-  import { DashboardService } from '$lib/stores/dashboard';
+  import { DashboardService } from '$lib/services/dashboardService'; // Fixed import path
   import type { Player } from '$lib/database/types';
 
   let players: Player[] = [];
