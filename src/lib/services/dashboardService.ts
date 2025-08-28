@@ -211,24 +211,42 @@ export class DashboardService {
   /**
    * Get current week number based on fixtures
    */
-  async getCurrentWeek(): Promise<number> {
-    try {
-      // Get the next upcoming fixture's week number
-      const { data } = await supabase
-        .from('fixtures')
-        .select('week_number')
-        .eq('league_year', '2025/26')
-        .eq('status', 'to_play')
-        .order('week_number', { ascending: true })
-        .limit(1)
-        .single();
-      
-      return data?.week_number || 1;
-    } catch (err: any) {
-      console.error('getCurrentWeek error:', err);
-      return 1; // Default to week 1 if no fixtures found
+async getCurrentWeek(): Promise<number> {
+  try {
+    // First try to get the next upcoming fixture
+    const { data: upcomingFixture } = await supabase
+      .from('fixtures')
+      .select('week_number')
+      .eq('league_year', '2025/26')
+      .eq('status', 'to_play')
+      .order('week_number', { ascending: true })
+      .limit(1)
+      .single();
+    
+    if (upcomingFixture) {
+      return upcomingFixture.week_number;
     }
+    
+    // If no upcoming fixtures, get the latest completed one and add 1
+    const { data: lastFixture } = await supabase
+      .from('fixtures')
+      .select('week_number')
+      .eq('league_year', '2025/26')
+      .order('week_number', { ascending: false })
+      .limit(1)
+      .single();
+    
+    return lastFixture ? lastFixture.week_number + 1 : 1;
+    
+  } catch (err: any) {
+    console.error('getCurrentWeek error:', err);
+    // Calculate week based on current date as fallback
+    const seasonStart = new Date('2025-08-01'); // Adjust this to your season start
+    const now = new Date();
+    const weeksDiff = Math.floor((now.getTime() - seasonStart.getTime()) / (7 * 24 * 60 * 60 * 1000));
+    return Math.max(1, weeksDiff + 1);
   }
+}
   
   /**
    * Get recent match results
