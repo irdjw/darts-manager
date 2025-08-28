@@ -1,14 +1,10 @@
-// =================================================================
-// 1. AUTH SVELTE STORE - src/lib/stores/auth.ts
-// =================================================================
-
-import { writable, derived, type Readable } from 'svelte/store';
+import { writable, derived, get } from 'svelte/store';
 import { goto } from '$app/navigation';
+import { browser } from '$app/environment';
 import { supabase } from '../database/supabase';
 import type { User, AuthChangeEvent } from '@supabase/supabase-js';
 import type { UserRole } from '../database/types';
 
-// Auth state interface
 interface AuthState {
   user: User | null;
   userRole: UserRole['role'] | null;
@@ -16,7 +12,6 @@ interface AuthState {
   error: string | null;
 }
 
-// Create auth store with enhanced functionality
 function createAuthStore() {
   const { subscribe, set, update } = writable<AuthState>({
     user: null,
@@ -28,14 +23,17 @@ function createAuthStore() {
   return {
     subscribe,
     
-    // Initialize authentication
     init: async () => {
+      if (!browser) return;
+      
       try {
+        console.log('Auth: Starting initialization...');
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) throw error;
         
         if (session?.user) {
+          console.log('Auth: User session found, fetching role...');
           const role = await fetchUserRole(session.user.id);
           set({
             user: session.user,
@@ -43,7 +41,9 @@ function createAuthStore() {
             loading: false,
             error: null
           });
+          console.log('Auth: Initialization complete - authenticated');
         } else {
+          console.log('Auth: No user session found');
           set({
             user: null,
             userRole: null,
@@ -52,6 +52,7 @@ function createAuthStore() {
           });
         }
       } catch (err: any) {
+        console.error('Auth: Initialization error:', err);
         set({
           user: null,
           userRole: null,
@@ -61,8 +62,8 @@ function createAuthStore() {
       }
     },
 
-    // Sign in with email and password
     signIn: async (email: string, password: string) => {
+      console.log('Auth: Sign in attempt...');
       update(state => ({ ...state, loading: true, error: null }));
       
       try {
@@ -72,7 +73,8 @@ function createAuthStore() {
         });
 
         if (error) throw error;
-
+        
+        console.log('Auth: Sign in successful, fetching role...');
         const role = await fetchUserRole(data.user.id);
         
         set({
@@ -82,19 +84,19 @@ function createAuthStore() {
           error: null
         });
 
-        // Redirect based on user role
         const redirectPath = getRedirectPath(role);
+        console.log('Auth: Redirecting to:', redirectPath);
         await goto(redirectPath, { replaceState: true });
 
         return { success: true, error: null };
       } catch (err: any) {
         const error = handleAuthError(err);
+        console.error('Auth: Sign in error:', error);
         update(state => ({ ...state, loading: false, error }));
         return { success: false, error };
       }
     },
 
-    // Sign out
     signOut: async () => {
       try {
         const { error } = await supabase.auth.signOut();
@@ -117,25 +119,15 @@ function createAuthStore() {
       }
     },
 
-    // Clear error
     clearError: () => {
       update(state => ({ ...state, error: null }));
-    },
-
-    // Refresh user role (for admin changes)
-    refreshRole: async () => {
-      const currentState = get(auth);
-      if (currentState.user) {
-        const role = await fetchUserRole(currentState.user.id);
-        update(state => ({ ...state, userRole: role }));
-      }
     }
   };
 }
 
-// Helper function to fetch user role
 async function fetchUserRole(userId: string): Promise<UserRole['role']> {
   try {
+    console.log('Auth: Fetching role for user:', userId);
     const { data, error } = await supabase
       .from('user_roles')
       .select('role')
@@ -143,14 +135,15 @@ async function fetchUserRole(userId: string): Promise<UserRole['role']> {
       .single();
 
     if (error && error.code !== 'PGRST116') throw error;
-    return data?.role || 'player';
+    const role = data?.role || 'player';
+    console.log('Auth: User role:', role);
+    return role;
   } catch (err) {
     console.error('Error fetching user role:', err);
     return 'player';
   }
 }
 
-// Helper function for auth errors
 function handleAuthError(error: any): string {
   if (error.message?.includes('Invalid login credentials')) {
     return 'Invalid email or password';
@@ -164,39 +157,34 @@ function handleAuthError(error: any): string {
   return error.message || 'Authentication failed';
 }
 
-// Helper function for redirect paths
 function getRedirectPath(userRole: UserRole['role'] | null): string {
   switch (userRole) {
     case 'super_admin':
     case 'admin':
-      return '/dashboard';
     case 'captain':
-      return '/team';
     case 'player':
     default:
-      return '/stats';
+      return '/dashboard';
   }
 }
 
-// Create store instance
 export const auth = createAuthStore();
 
-// Listen for auth changes
-supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session) => {
-  if (event === 'SIGNED_IN' && session?.user) {
-    const role = await fetchUserRole(session.user.id);
-    auth.subscribe(state => {
-      if (!state.user || state.user.id !== session.user.id) {
-        auth.init(); // Re-initialise if user changed
-      }
-    });
-  } else if (event === 'SIGNED_OUT') {
-    // Auth store will be updated by signOut method
-    goto('/login', { replaceState: true });
-  }
-});
+// Only setup auth listener in browser
+if (browser) {
+  supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session) => {
+    console.log('Auth: State change event:', event);
+    
+    if (event === 'SIGNED_IN' && session?.user) {
+      console.log('Auth: User signed in via state change');
+      // Let the signIn method handle this
+    } else if (event === 'SIGNED_OUT') {
+      console.log('Auth: User signed out via state change');
+      goto('/login', { replaceState: true });
+    }
+  });
+}
 
-// Derived stores for convenience
 export const user = derived(auth, $auth => $auth.user);
 export const userRole = derived(auth, $auth => $auth.userRole);
 export const isAuthenticated = derived(auth, $auth => !!$auth.user);

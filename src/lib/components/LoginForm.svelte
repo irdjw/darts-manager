@@ -1,3 +1,4 @@
+<!-- src/lib/components/LoginForm.svelte -->
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
   import { auth, authError } from '../stores/auth';
@@ -9,7 +10,6 @@
   let loading = false;
   let showPassword = false;
   
-  // Clear any previous errors on mount
   onMount(() => {
     auth.clearError();
   });
@@ -126,6 +126,17 @@
         {/if}
       </button>
     </form>
+
+    <!-- Demo Accounts -->
+    <div class="mt-8 p-4 bg-gray-50 rounded-md">
+      <h3 class="text-sm font-medium text-gray-900 mb-2">Demo Accounts:</h3>
+      <div class="text-xs text-gray-600 space-y-1">
+        <div>SuperAdmin: admin@iwdarts.com</div>
+        <div>Captain: captain@iwdarts.com</div>
+        <div>Player: player@iwdarts.com</div>
+        <div class="font-medium">Password: password123</div>
+      </div>
+    </div>
 
     <!-- Footer -->
     <div class="mt-8 text-center">
