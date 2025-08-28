@@ -85,3 +85,11 @@ export interface PaginatedResponse<T> extends ApiResponse<T[]> {
   page: number;
   pageSize: number;
 }
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  role: UserRole['role'];
+  created_at: string;
+  last_sign_in_at: string | null;
+}
