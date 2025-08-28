@@ -1,7 +1,7 @@
 <!-- src/lib/components/UserManager.svelte -->
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { supabase } from '../database/supabase';
+  import { supabase } from '$lib/database/supabase'; from '../database/supabase';
   import { userRole } from '../stores/auth';
   import { getPermissions, USER_ROLES } from '../utils/permissions';
   import type { UserRole } from '../database/types';

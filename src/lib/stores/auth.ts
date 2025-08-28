@@ -1,7 +1,7 @@
 import { writable, derived, get } from 'svelte/store';
 import { goto } from '$app/navigation';
 import { browser } from '$app/environment';
-import { supabase } from '../database/supabase';
+import { supabase } from '$lib/database/supabase';
 import type { User, AuthChangeEvent } from '@supabase/supabase-js';
 import type { UserRole } from '../database/types';
 

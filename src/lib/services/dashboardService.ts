@@ -1,5 +1,5 @@
 // src/lib/services/dashboardService.ts
-import { supabase } from '$lib/supabase';
+import { supabase } from '$lib/database/supabase'; from '$lib/supabase';
 import type { Fixture, Player, AttendanceRecord, DashboardStats } from '$lib/types/dashboard';
 
 export class DashboardService {

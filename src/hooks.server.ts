@@ -1,6 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import type { Handle } from '@sveltejs/kit';
-import { supabase } from '$lib/database/supabase';
+import { supabase } from '$lib/database/supabase'; from '$lib/database/supabase';
 import { requiresAuthentication, canAccessRoute, getPermissions } from '$lib/utils/permissions';
 
 export const handle: Handle = async ({ event, resolve }) => {
