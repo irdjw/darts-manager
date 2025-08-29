@@ -1,13 +1,17 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import QuickActions from '$lib/components/QuickActions.svelte';
+  import ImpersonationPanel from '$lib/components/ImpersonationPanel.svelte';
   import type { PageData } from './$types';
   
   export let data: PageData;
   
   let loading = true;
+  let showImpersonationPanel = false;
   
   $: userRole = data?.userRole || 'player';
+  $: originalRole = data?.originalRole || 'player';
+  $: isImpersonating = data?.isImpersonating || false;
   let currentFixture = {
     week_number: 1,
     opposition: 'Sample Team',
@@ -51,13 +55,46 @@
                          'bg-gray-100 text-gray-800'}">
               {userRole.replace('_', ' ')}
             </span>
+            {#if isImpersonating}
+              <span class="px-2 py-1 text-xs font-medium rounded-full bg-orange-100 text-orange-800">
+                Testing Mode
+              </span>
+            {/if}
           </div>
           <p class="text-sm text-gray-500 hidden lg:block">Isaac Wilson Darts Team</p>
         </div>
       </div>
       
-      <!-- Logout button for larger screens -->
-      <div class="hidden lg:block">
+      <!-- Controls for larger screens -->
+      <div class="hidden lg:flex lg:items-center lg:space-x-3">
+        <!-- Impersonation controls for super admin -->
+        {#if originalRole === 'super_admin' && !isImpersonating}
+          <button
+            on:click={() => showImpersonationPanel = true}
+            class="flex items-center space-x-2 px-4 py-2 border border-purple-300 rounded-lg 
+                   text-sm font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 transition-colors"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                    d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
+            </svg>
+            <span>View As User</span>
+          </button>
+        {:else if isImpersonating}
+          <button
+            on:click={() => showImpersonationPanel = true}
+            class="flex items-center space-x-2 px-4 py-2 border border-orange-300 rounded-lg 
+                   text-sm font-medium text-orange-700 bg-orange-50 hover:bg-orange-100 transition-colors"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>Stop Testing</span>
+          </button>
+        {/if}
+        
+        <!-- Logout button -->
         <form action="/logout" method="post">
           <button
             type="submit"
@@ -142,3 +179,14 @@
     {/if}
   </main>
 </div>
+
+<!-- Impersonation Panel -->
+{#if originalRole === 'super_admin'}
+  <ImpersonationPanel 
+    {userRole}
+    bind:visible={showImpersonationPanel}
+    on:role-changed={() => {
+      // Panel handles page reload, so this is just for completeness
+    }}
+  />
+{/if}
