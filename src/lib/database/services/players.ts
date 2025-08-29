@@ -34,9 +34,10 @@ export class PlayersService {
   static async getAvailablePlayers(weekNumber: number): Promise<ApiResponse<Player[]>> {
     try {
       const { data, error } = await supabase
-        .from('players')
+        .from('attendance')
         .select('*')
-        .or(`drop_week.is.null,drop_week.neq.${weekNumber}`)
+        .eq(`available`, true)
+        .eq(`week_number`, weekNumber)
         .order('name');
 
       if (error) throw error;
