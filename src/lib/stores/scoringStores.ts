@@ -21,6 +21,15 @@ export const gameState = writable<GameState>({
   gameType: 'league'
 });
 
+// Track whether players have started the leg (must start on double)
+export const legStartStatus = writable<{
+  homeStarted: boolean;
+  awayStarted: boolean;
+}>({
+  homeStarted: false,
+  awayStarted: false
+});
+
 // Current scoring mode
 export const scoringMode = writable<ScoringMode['type']>('dart-by-dart');
 
@@ -114,6 +123,11 @@ export const scoringActions = {
       gameType
     });
     
+    legStartStatus.set({
+      homeStarted: false,
+      awayStarted: false
+    });
+    
     dartHistory.set([]);
     currentTurnDarts.set([]);
     legHistory.set([]);
@@ -196,6 +210,30 @@ export const scoringActions = {
   // Update enhanced stats
   updateEnhancedStats: (updates: Partial<{ checkoutAttempts: number; checkoutHits: number; highestCheckout: number }>) => {
     enhancedStats.update(stats => ({ ...stats, ...updates }));
+  },
+
+  // Mark player as having started the leg (when they score their first double)
+  markPlayerStarted: (player: 'home' | 'away') => {
+    legStartStatus.update(status => ({
+      ...status,
+      [player + 'Started']: true
+    }));
+  },
+
+  // Check if current player has started the leg
+  hasPlayerStarted: (): Promise<boolean> => {
+    return new Promise(resolve => {
+      const gameUnsubscribe = gameState.subscribe(gameState => {
+        const legUnsubscribe = legStartStatus.subscribe(legStatus => {
+          const hasStarted = gameState.currentThrower === 'home' 
+            ? legStatus.homeStarted 
+            : legStatus.awayStarted;
+          resolve(hasStarted);
+          gameUnsubscribe();
+          legUnsubscribe();
+        });
+      });
+    });
   },
 
   // Get current game state (for external use)

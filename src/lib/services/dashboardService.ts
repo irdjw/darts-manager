@@ -1,4 +1,4 @@
-import { supabase } from '$lib/database/supabase';
+import { supabase, handleDatabaseError, retryDatabaseOperation } from '$lib/database/supabase';
 import type { Fixture, Player, AttendanceRecord, DashboardStats } from '$lib/types/dashboard';
 
 export class DashboardService {
@@ -18,13 +18,17 @@ export class DashboardService {
       
       if (error && error.code !== 'PGRST116') {
         console.error('Error fetching current fixture:', error);
-        throw new Error('Failed to load current fixture');
+        throw error;
       }
       
       return data || null;
     } catch (err: any) {
       console.error('getCurrentFixture error:', err);
-      return null;
+      // Return null for not found, but throw for other errors
+      if (err.code === 'PGRST116') {
+        return null;
+      }
+      throw new Error(handleDatabaseError(err));
     }
   }
   
@@ -43,13 +47,13 @@ export class DashboardService {
       
       if (error) {
         console.error('Error fetching upcoming fixtures:', error);
-        throw new Error('Failed to load fixtures');
+        throw error;
       }
       
       return data || [];
     } catch (err: any) {
       console.error('getUpcomingFixtures error:', err);
-      throw new Error('Failed to load upcoming fixtures');
+      throw new Error(handleDatabaseError(err));
     }
   }
   
@@ -151,13 +155,13 @@ export class DashboardService {
       
       if (error) {
         console.error('Error fetching players:', error);
-        throw new Error('Failed to load players');
+        throw error;
       }
       
       return data || [];
     } catch (err: any) {
       console.error('getAllPlayers error:', err);
-      throw new Error('Failed to load players');
+      throw new Error(handleDatabaseError(err));
     }
   }
   
@@ -177,13 +181,16 @@ export class DashboardService {
       
       if (error && error.code !== 'PGRST116') {
         console.error('Error fetching attendance:', error);
-        throw new Error('Failed to load attendance');
+        throw error;
       }
       
       return data || [];
     } catch (err: any) {
       console.error('getWeeklyAttendance error:', err);
-      throw new Error('Failed to load attendance');
+      if (err.code === 'PGRST116') {
+        return [];
+      }
+      throw new Error(handleDatabaseError(err));
     }
   }
   
@@ -192,19 +199,26 @@ export class DashboardService {
    */
   async saveAttendance(records: Partial<AttendanceRecord>[]): Promise<void> {
     try {
-      const { error } = await supabase
-        .from('attendance')
-        .upsert(records, { 
-          onConflict: 'player_id,week_number,league_year'
-        });
-      
-      if (error) {
-        console.error('Error saving attendance:', error);
-        throw new Error('Failed to save attendance');
+      if (!records || records.length === 0) {
+        throw new Error('No attendance records provided');
       }
+
+      // Use retry logic for critical save operations
+      await retryDatabaseOperation(async () => {
+        const { error } = await supabase
+          .from('attendance')
+          .upsert(records, { 
+            onConflict: 'player_id,week_number,league_year'
+          });
+        
+        if (error) {
+          console.error('Error saving attendance:', error);
+          throw error;
+        }
+      });
     } catch (err: any) {
       console.error('saveAttendance error:', err);
-      throw new Error('Failed to save attendance');
+      throw new Error(handleDatabaseError(err));
     }
   }
   
@@ -263,13 +277,13 @@ async getCurrentWeek(): Promise<number> {
       
       if (error) {
         console.error('Error fetching recent results:', error);
-        throw new Error('Failed to load recent results');
+        throw error;
       }
       
       return data || [];
     } catch (err: any) {
       console.error('getRecentResults error:', err);
-      throw new Error('Failed to load recent results');
+      throw new Error(handleDatabaseError(err));
     }
   }
   
@@ -289,7 +303,7 @@ async getCurrentWeek(): Promise<number> {
       
       if (error) {
         console.error('Error fetching player stats:', error);
-        throw new Error('Failed to load player statistics');
+        throw error;
       }
       
       const totalPlayers = players?.length || 0;
@@ -310,6 +324,8 @@ async getCurrentWeek(): Promise<number> {
       };
     } catch (err: any) {
       console.error('getPlayerStatsSummary error:', err);
+      // Return fallback data instead of throwing for this method
+      // since it's used for dashboard display
       return {
         totalPlayers: 0,
         activePlayers: 0,

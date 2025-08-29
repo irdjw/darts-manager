@@ -6,6 +6,7 @@
   export let disabled: boolean = false;
   export let autoSelected: boolean = false;
   export let unavailable: boolean = false;
+  export let currentWeek: number = 1; // Pass current week from parent component
   
   const dispatch = createEventDispatcher();
   
@@ -13,6 +14,15 @@
     if (!disabled) {
       dispatch('click');
     }
+  }
+  
+  // Calculate weeks since last played
+  function getWeeksSinceLastPlayed(): string {
+    if (!player.last_game_week) {
+      return 'Never';
+    }
+    const weeksSince = currentWeek - player.last_game_week;
+    return weeksSince <= 0 ? '0' : weeksSince.toString();
   }
 </script>
 
@@ -58,18 +68,27 @@
     {/if}
   </div>
   
-  <div class="grid grid-cols-3 gap-4 text-sm">
+  <div class="grid grid-cols-2 gap-3 text-sm mb-3">
     <div class="text-center">
-      <p class="text-gray-500">Games</p>
-      <p class="font-medium text-gray-900">{player.games_played || 0}</p>
+      <p class="text-gray-500">Weeks Attended</p>
+      <p class="font-medium text-blue-600">{player.weeks_attended || 0}</p>
     </div>
     <div class="text-center">
-      <p class="text-gray-500">Won</p>
-      <p class="font-medium text-green-600">{player.games_won || 0}</p>
+      <p class="text-gray-500">Games Won/Lost</p>
+      <p class="font-medium text-gray-900">{player.games_won || 0}/{player.games_lost || 0}</p>
+    </div>
+  </div>
+  
+  <div class="grid grid-cols-2 gap-3 text-sm">
+    <div class="text-center">
+      <p class="text-gray-500">Weeks Since Played</p>
+      <p class="font-medium text-orange-600">
+        {getWeeksSinceLastPlayed()}
+      </p>
     </div>
     <div class="text-center">
-      <p class="text-gray-500">180s</p>
-      <p class="font-medium text-blue-600">{player.total_180s || 0}</p>
+      <p class="text-gray-500">Win Rate</p>
+      <p class="font-medium text-green-600">{player.win_percentage || 0}%</p>
     </div>
   </div>
 </button>

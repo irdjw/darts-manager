@@ -27,16 +27,33 @@ export const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_K
   }
 });
 
-// Test connection on initialization
-supabase.from('players').select('count').limit(1).then(({ error }) => {
-  if (error) {
-    console.error('Supabase connection failed:', error);
-  } else {
+// Test connection on initialization with retry logic
+let connectionRetries = 0;
+const maxRetries = 3;
+
+const testConnection = async () => {
+  try {
+    const { error } = await supabase.from('players').select('count').limit(1);
+    if (error) {
+      throw error;
+    }
     console.log('Supabase connected successfully');
+  } catch (error) {
+    connectionRetries++;
+    console.error(`Supabase connection failed (attempt ${connectionRetries}/${maxRetries}):`, error);
+    
+    if (connectionRetries < maxRetries) {
+      setTimeout(testConnection, 1000 * connectionRetries); // Exponential backoff
+    } else {
+      console.error('Supabase connection failed after maximum retries');
+    }
   }
-});
+};
+
+testConnection();
 
 export function handleDatabaseError(error: any): string {
+  // Handle common PostgreSQL error codes
   if (error.code === 'PGRST116') {
     return 'Record not found';
   }
@@ -46,8 +63,87 @@ export function handleDatabaseError(error: any): string {
   if (error.code === '23503') {
     return 'Cannot delete - record is referenced by other data';
   }
+  if (error.code === '23502') {
+    return 'Required field is missing';
+  }
+  if (error.code === '23514') {
+    return 'Data violates constraints';
+  }
   if (error.code === 'PGRST301') {
     return 'Database connection failed';
   }
-  return error.message || 'Database operation failed';
+  if (error.code === 'PGRST204') {
+    return 'Invalid request format';
+  }
+  if (error.code === 'PGRST100') {
+    return 'Database schema error';
+  }
+  
+  // Handle network/connection errors
+  if (error.name === 'NetworkError' || error.message?.includes('fetch')) {
+    return 'Network connection failed. Please check your internet connection.';
+  }
+  
+  // Handle timeout errors
+  if (error.name === 'TimeoutError' || error.message?.includes('timeout')) {
+    return 'Request timed out. Please try again.';
+  }
+  
+  // Handle authentication errors
+  if (error.status === 401) {
+    return 'Authentication required. Please log in again.';
+  }
+  if (error.status === 403) {
+    return 'You do not have permission to perform this action.';
+  }
+  
+  // Handle server errors
+  if (error.status >= 500) {
+    return 'Server error. Please try again later.';
+  }
+  
+  // Return the original error message or a generic fallback
+  return error.message || error.details || 'Database operation failed';
+}
+
+// Connection health check utility
+export async function checkDatabaseHealth(): Promise<{ healthy: boolean; error?: string }> {
+  try {
+    const { error } = await supabase.from('players').select('count').limit(1);
+    return { healthy: !error, error: error?.message };
+  } catch (err: any) {
+    return { healthy: false, error: handleDatabaseError(err) };
+  }
+}
+
+// Retry utility for critical operations
+export async function retryDatabaseOperation<T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 3,
+  delayMs: number = 1000
+): Promise<T> {
+  let lastError: any;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error: any) {
+      lastError = error;
+      console.error(`Database operation failed (attempt ${attempt}/${maxRetries}):`, error);
+      
+      // Don't retry on certain error types
+      if (error.code === 'PGRST116' || // Not found
+          error.code === '23505' ||    // Unique constraint
+          error.status === 401 ||      // Unauthorized
+          error.status === 403) {      // Forbidden
+        throw error;
+      }
+      
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, delayMs * attempt));
+      }
+    }
+  }
+  
+  throw new Error(`Operation failed after ${maxRetries} attempts: ${handleDatabaseError(lastError)}`);
 }

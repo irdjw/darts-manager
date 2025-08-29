@@ -159,6 +159,7 @@
               {isSelected}
               disabled={!canSelect && !canDeselect}
               autoSelected={isAutoSelected}
+              currentWeek={weekNumber}
               on:click={() => togglePlayerSelection(player)}
             />
           {/each}
@@ -176,6 +177,7 @@
                 isSelected={false}
                 disabled={true}
                 unavailable={true}
+                currentWeek={weekNumber}
               />
             {/each}
           </div>

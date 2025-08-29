@@ -28,15 +28,17 @@
 </svelte:head>
 
 <div class="min-h-screen bg-gray-50 pb-16">
+  <!-- Page Header (visible on all screen sizes) -->
   <header class="bg-white shadow-sm border-b border-gray-200 px-4 py-4">
     <div class="flex items-center justify-between">
       <div class="flex items-center space-x-3">
-        <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+        <!-- Hide logo on mobile (shown in global header) -->
+        <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center lg:block hidden">
           <span class="text-white text-sm font-bold">IW</span>
         </div>
         <div>
           <h1 class="text-lg font-bold text-gray-900">Dashboard</h1>
-          <p class="text-sm text-gray-500">Isaac Wilson Darts Team</p>
+          <p class="text-sm text-gray-500 hidden lg:block">Isaac Wilson Darts Team</p>
         </div>
       </div>
     </div>

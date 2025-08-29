@@ -1,3 +1,9 @@
+import { writable } from 'svelte/store';
+import { DashboardService } from '$lib/services/dashboardService';
+import type { Player, AttendanceRecord, TeamSelection } from '$lib/types/dashboard';
+
+const dashboardService = new DashboardService();
+
 export const allPlayers = writable<Player[]>([]);
 export const weeklyAttendance = writable<AttendanceRecord[]>([]);
 export const currentSelection = writable<TeamSelection | null>(null);
@@ -18,19 +24,19 @@ export const teamStore = {
     const players = await dashboardService.getAllPlayers();
     const attendance = await dashboardService.getWeeklyAttendance(weekNumber);
     
-    // Business logic for team selection
+    // Captain can pick from ALL players who are in attendance (regardless of previous performance)
     const available = players.filter(p => {
       const attendanceRecord = attendance.find(a => a.player_id === p.id);
-      return attendanceRecord?.attended && (!p.drop_week || p.drop_week !== weekNumber);
+      return attendanceRecord?.attended === true;
     });
     
-    const unavailable = players.filter(p => !available.includes(p));
+    const unavailable = players.filter(p => {
+      const attendanceRecord = attendance.find(a => a.player_id === p.id);
+      return !attendanceRecord || attendanceRecord.attended === false;
+    });
     
-    // Auto-select previous winners (if week > 1)
-    let autoSelected: Player[] = [];
-    if (weekNumber > 1) {
-      autoSelected = available.filter(p => p.last_result === 'win').slice(0, 7);
-    }
+    // No auto-selection - captain picks from all attendees
+    const autoSelected: Player[] = [];
     
     const selection: TeamSelection = {
       week_number: weekNumber,

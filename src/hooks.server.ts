@@ -1,64 +1,97 @@
 import { redirect } from '@sveltejs/kit';
 import type { Handle } from '@sveltejs/kit';
-import { supabase } from '$lib/database/supabase';
-import { requiresAuthentication, canAccessRoute, getPermissions } from '$lib/utils/permissions';
+import { createServerClient } from '@supabase/ssr';
+import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 
 export const handle: Handle = async ({ event, resolve }) => {
-  // Get session from request
-  const sessionToken = event.cookies.get('sb-access-token');
-  
-  if (sessionToken) {
-    try {
-      const { data: { user }, error } = await supabase.auth.getUser(sessionToken);
-      
-      if (!error && user) {
-        // Fetch user role
-        const { data: roleData } = await supabase
-          .from('user_roles')
-          .select('role')
-          .eq('user_id', user.id)
-          .single();
+  // Create Supabase client for server-side auth
+  const supabase = createServerClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
+    cookies: {
+      get: (name) => event.cookies.get(name),
+      set: (name, value, options) => {
+        event.cookies.set(name, value, { ...options, path: '/' });
+      },
+      remove: (name, options) => {
+        event.cookies.delete(name, { ...options, path: '/' });
+      },
+    },
+  });
 
-        // Attach user info to event
-        event.locals.user = user;
-        event.locals.userRole = roleData?.role || 'player';
-      }
+  // Get session from Supabase (handles cookie names properly)
+  const {
+    data: { session },
+    error,
+  } = await supabase.auth.getSession();
+
+  let userRole = 'player';
+  
+  if (session?.user && !error) {
+    // Attach user to event
+    event.locals.user = session.user;
+    
+    // Fetch user role
+    try {
+      const { data: roleData } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', session.user.id)
+        .single();
+      
+      userRole = roleData?.role || 'player';
+      event.locals.userRole = userRole;
     } catch (err) {
-      // Invalid session, clear it
-      event.cookies.delete('sb-access-token', { path: '/' });
+      console.warn('Failed to fetch user role:', err);
+      event.locals.userRole = 'player';
     }
   }
 
-  // Check if route requires authentication
+  // Define route protections
   const path = event.url.pathname;
-  
-  if (requiresAuthentication(path)) {
-    if (!event.locals.user) {
-      throw redirect(302, `/login?redirect=${encodeURIComponent(path)}`);
-    }
+  const publicRoutes = ['/', '/login'];
+  const requiresAuth = !publicRoutes.includes(path);
 
-    // Check specific route permissions
-    const routePermissions: Record<string, string> = {
-      '/admin': 'canAccessAdmin',
-      '/admin/users': 'canManageUsers',
-      '/admin/players': 'canManagePlayers',
-      '/admin/fixtures': 'canManageFixtures',
-      '/team': 'canSelectTeam',
-      '/team/selection': 'canSelectTeam',
-      '/attendance': 'canMarkAttendance'
+  // Handle authentication redirects
+  if (requiresAuth && !session?.user) {
+    throw redirect(302, `/login?redirect=${encodeURIComponent(path)}`);
+  }
+
+  // Handle role-based access (only for authenticated users)
+  if (session?.user) {
+    const rolePermissions: Record<string, string[]> = {
+      '/admin': ['admin', 'super_admin'],
+      '/admin/users': ['super_admin'],
+      '/admin/players': ['admin', 'super_admin'],
+      '/admin/fixtures': ['admin', 'super_admin'],
+      '/team': ['captain', 'admin', 'super_admin'],
+      '/team/selection': ['captain', 'admin', 'super_admin'],
     };
 
-    const requiredPermission = routePermissions[path];
-    
-    if (requiredPermission && !canAccessRoute(event.locals.userRole, requiredPermission)) {
-      // Redirect to appropriate dashboard based on role
-      const permissions = getPermissions(event.locals.userRole);
-      const redirectPath = permissions.canAccessAdmin ? '/admin' : 
-                          permissions.canSelectTeam ? '/team' : '/stats';
-      
+    const requiredRoles = rolePermissions[path];
+    if (requiredRoles && !requiredRoles.includes(userRole)) {
+      // Redirect to appropriate dashboard
+      const redirectPath = getUserDashboard(userRole);
       throw redirect(302, redirectPath);
     }
   }
 
-  return resolve(event);
+  // Set user in PageData for all routes
+  event.locals.supabase = supabase;
+
+  return resolve(event, {
+    filterSerializedResponseHeaders(name) {
+      return name === 'content-range';
+    },
+  });
 };
+
+function getUserDashboard(userRole: string): string {
+  switch (userRole) {
+    case 'super_admin':
+    case 'admin':
+      return '/admin';
+    case 'captain':
+      return '/team';
+    default:
+      return '/dashboard';
+  }
+}

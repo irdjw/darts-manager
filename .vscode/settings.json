@@ -1,2 +1,17 @@
 {
+  "claude-code.autoStart": true,
+  "claude-code.projectContext": true,
+  "claude-code.includeFileTypes": [
+    ".svelte",
+    ".ts",
+    ".js",
+    ".json",
+    ".css",
+    ".md"
+  ],
+  "svelte.enable-ts-plugin": true,
+  "typescript.preferences.includePackageJsonAutoImports": "on",
+  "tailwindCSS.includeLanguages": {
+    "svelte": "html"
+  }
 }

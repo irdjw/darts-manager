@@ -14,7 +14,8 @@
     canCompleteTurn,
     currentTurnTotal,
     scoringActions,
-    currentLegStats
+    currentLegStats,
+    legStartStatus
   } from '../stores/scoringStores';
   import { checkoutService } from '../services/checkoutService';
   import type { ScoringEngineProps, DartThrow } from '../types/scoring';
@@ -43,6 +44,7 @@
   let canCompleteTurnValue: boolean;
   let currentTurnTotalValue: number;
   let statsValue: any;
+  let legStartStatusValue: any;
 
   // Store subscriptions
   const unsubscribers: (() => void)[] = [];
@@ -75,7 +77,8 @@
       currentDartsRemaining.subscribe(value => dartsRemainingValue = value),
       canCompleteTurn.subscribe(value => canCompleteTurnValue = value),
       currentTurnTotal.subscribe(value => currentTurnTotalValue = value),
-      currentLegStats.subscribe(value => statsValue = value)
+      currentLegStats.subscribe(value => statsValue = value),
+      legStartStatus.subscribe(value => legStartStatusValue = value)
     );
   });
 
@@ -97,17 +100,34 @@
     
     if (!validateDartScore(dartValue)) return;
 
+    // Check if player has started the leg (must start on double)
+    const hasPlayerStarted = currentGameState.currentThrower === 'home' 
+      ? legStartStatusValue?.homeStarted 
+      : legStartStatusValue?.awayStarted;
+    
+    const isDoubleAttempt = checkoutService.isDoubleScore(dartValue);
+    
+    // If player hasn't started and this isn't a double, reject the dart
+    if (!hasPlayerStarted && dartValue > 0 && !isDoubleAttempt) {
+      alert('You must start on a double! Please throw at a double to begin scoring.');
+      return;
+    }
+
     const newScore = currentScoreValue - dartValue;
     
     // Enhanced checkout detection
     const wasCheckoutOpportunity = checkoutService.isCheckoutOpportunity(currentScoreValue);
-    const isDoubleAttempt = checkoutService.isDoubleScore(dartValue);
     const isValidFinish = newScore === 0 && isDoubleAttempt;
     
     // Check for bust
     if (newScore < 0 || newScore === 1) {
       handleBust();
       return;
+    }
+
+    // If this is the first scoring dart and it's a double, mark player as started
+    if (!hasPlayerStarted && dartValue > 0 && isDoubleAttempt) {
+      scoringActions.markPlayerStarted(currentGameState.currentThrower);
     }
 
     // Add dart to current turn
@@ -138,6 +158,25 @@
       return;
     }
 
+    // Check if player has started the leg (must start on double)
+    const hasPlayerStarted = currentGameState.currentThrower === 'home' 
+      ? legStartStatusValue?.homeStarted 
+      : legStartStatusValue?.awayStarted;
+    
+    // If player hasn't started and scored points, confirm they started on a double
+    if (!hasPlayerStarted && total > 0) {
+      const confirmedDoubleStart = confirm(
+        `You scored ${total} points. Did you start on a double? (Required to begin scoring)`
+      );
+      
+      if (confirmedDoubleStart) {
+        scoringActions.markPlayerStarted(currentGameState.currentThrower);
+      } else {
+        alert('You must start on a double! This turn will not count.');
+        return;
+      }
+    }
+
     const newScore = currentScoreValue - total;
     
     // Check for bust
@@ -146,12 +185,22 @@
       return;
     }
 
-    // For turn-total mode, we estimate if it was a checkout attempt
+    // For turn-total mode, we need to verify the finish was on a double
     const wasCheckoutOpportunity = checkoutService.isCheckoutOpportunity(currentScoreValue);
     const couldBeFinish = newScore === 0;
 
     if (couldBeFinish) {
-      completeGame();
+      // In turn-total mode, ask player to confirm they finished on a double
+      const confirmedDoubleFinish = confirm(
+        `You scored ${total} to finish on 0. Did you finish on a double? (Required to win)`
+      );
+      
+      if (confirmedDoubleFinish) {
+        completeGame();
+      } else {
+        alert('You must finish on a double! This turn will be treated as a bust.');
+        handleBust();
+      }
     } else {
       completeTurn();
     }
@@ -347,6 +396,22 @@
           {currentGameState?.currentThrower === 'home' ? homePlayerName : awayPlayerName} to throw
         </p>
         <p class="text-xs text-gray-500">{dartsRemainingValue} dart{dartsRemainingValue !== 1 ? 's' : ''} remaining</p>
+        
+        <!-- Start status indicators -->
+        <div class="flex justify-center gap-4 mt-2">
+          <div class="flex items-center gap-1">
+            <span class="text-xs text-gray-500">{homePlayerName}:</span>
+            <span class="text-xs {legStartStatusValue?.homeStarted ? 'text-green-600' : 'text-red-500'}">
+              {legStartStatusValue?.homeStarted ? '✓ Started' : '⚠ Must start on double'}
+            </span>
+          </div>
+          <div class="flex items-center gap-1">
+            <span class="text-xs text-gray-500">{awayPlayerName}:</span>
+            <span class="text-xs {legStartStatusValue?.awayStarted ? 'text-green-600' : 'text-red-500'}">
+              {legStartStatusValue?.awayStarted ? '✓ Started' : '⚠ Must start on double'}
+            </span>
+          </div>
+        </div>
       </div>
     </div>
 
