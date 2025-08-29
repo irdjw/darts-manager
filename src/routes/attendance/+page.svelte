@@ -95,7 +95,7 @@
         week_number: currentWeek,
         league_year: '2025/26',
         available: attendance.get(player.id) ?? true,
-        marked_at: new Date().toISOString()
+        created_at: new Date().toISOString()
       }));
 
       // Save to database

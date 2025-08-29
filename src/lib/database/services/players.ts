@@ -1,4 +1,4 @@
-import { supabase, handleDatabaseError, type DatabaseError } from '../supabase.js';
+import { supabase, handleDatabaseError } from '../supabase.js';
 import type { Player, ApiResponse } from '../types.js';
 
 export class PlayersService {
