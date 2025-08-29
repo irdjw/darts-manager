@@ -51,3 +51,33 @@ export interface DashboardStats {
   top_performer: Player;
   most_improved: Player;
 }
+
+export interface GameAssignment {
+  gameNumber: number;
+  playerId: string | null;
+  playerName: string | null;
+  status: 'pending' | 'in_progress' | 'completed';
+  homeScore: number;
+  awayScore: number;
+  result: 'win' | 'loss' | null;
+}
+
+export interface MatchResult {
+  fixtureId: string;
+  weekNumber: number;
+  gameResults: GameResult[];
+  teamResult: 'win' | 'loss';
+  homeScore: number;
+  awayScore: number;
+  completed: boolean;
+}
+
+export interface GameResult {
+  gameNumber: number;
+  playerId: string;
+  playerName: string;
+  result: 'win' | 'loss';
+  homeScore: number;
+  awayScore: number;
+  gameStats?: any; // PlayerGameStats from scoring system
+}

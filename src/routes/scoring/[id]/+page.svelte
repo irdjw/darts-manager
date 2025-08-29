@@ -28,7 +28,20 @@
   let selectedAwayPlayer: string = '';
   let availablePlayers: Player[] = [];
 
+  // Game context from match management
+  let gameNumber: number | null = null;
+  let preSelectedPlayerId: string | null = null;
+  let fromMatchManagement = false;
+
   $: fixtureId = $page.params.id || '';
+  
+  // Parse URL parameters for game context
+  $: {
+    const urlParams = new URLSearchParams($page.url.search);
+    gameNumber = urlParams.get('game') ? parseInt(urlParams.get('game')!) : null;
+    preSelectedPlayerId = urlParams.get('player');
+    fromMatchManagement = !!(gameNumber && preSelectedPlayerId);
+  }
 
   onMount(async () => {
     if (fixtureId) {
@@ -72,8 +85,17 @@
       const allPlayers = await dashboardService.getAllPlayers();
       availablePlayers = allPlayers.filter(p => !p.drop_week);
       
-      // Auto-select players if we have attendance data for this week
-      if (fixture) {
+      // Auto-select players based on context
+      if (fromMatchManagement && preSelectedPlayerId) {
+        // Coming from match management - pre-select the assigned player
+        selectedHomePlayer = preSelectedPlayerId;
+        // Start the game immediately with the selected player
+        if (availablePlayers.length > 1) {
+          // For now, auto-select an opponent (in real game this would be opponent team player)
+          selectedAwayPlayer = availablePlayers.find(p => p.id !== preSelectedPlayerId)?.id || '';
+        }
+      } else if (fixture) {
+        // Auto-select players if we have attendance data for this week
         try {
           const attendance = await dashboardService.getWeeklyAttendance(fixture.week_number);
           const selectedAttendees = attendance.filter(a => a.selected && a.attended);
@@ -146,8 +168,26 @@
 
   function finishAndSave() {
     // In a real app, save results to database
-    // For now, just navigate back
-    goto('/dashboard');
+    const gameResult = {
+      gameNumber,
+      homePlayer: homePlayer?.name,
+      awayPlayer: awayPlayer?.name,
+      winner: matchStats.find(s => s.gameWon)?.playerName,
+      stats: matchStats
+    };
+    
+    // Save to localStorage temporarily for match management screen
+    if (fromMatchManagement && gameNumber) {
+      const existingResults = JSON.parse(localStorage.getItem(`match_${fixtureId}`) || '{}');
+      existingResults[`game_${gameNumber}`] = gameResult;
+      localStorage.setItem(`match_${fixtureId}`, JSON.stringify(existingResults));
+      
+      // Navigate back to match management
+      goto(`/match/${fixtureId}`);
+    } else {
+      // Navigate back to dashboard
+      goto('/dashboard');
+    }
   }
 </script>
 
@@ -160,10 +200,15 @@
   <header class="bg-white shadow-sm border-b border-gray-200 px-4 py-4 md:px-6">
     <div class="flex items-center justify-between">
       <div>
-        <h1 class="text-lg md:text-xl font-bold text-gray-900">Match Scoring</h1>
+        <h1 class="text-lg md:text-xl font-bold text-gray-900">
+          {fromMatchManagement ? `Game ${gameNumber} Scoring` : 'Match Scoring'}
+        </h1>
         {#if fixture}
           <p class="text-sm text-gray-500">
             Week {fixture.week_number} vs {fixture.opposition}
+            {#if fromMatchManagement}
+              • Game {gameNumber} of 7
+            {/if}
           </p>
         {/if}
       </div>

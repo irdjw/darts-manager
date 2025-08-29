@@ -55,21 +55,30 @@
         <!-- Next Match -->
         <section>
           <h2 class="text-lg font-semibold text-gray-900 mb-3">Next Match</h2>
-          <div class="bg-white p-4 rounded-lg shadow-lg">
+          <a 
+            href="/match/{currentFixture.id || 'current'}"
+            class="block bg-white p-4 rounded-lg shadow-lg hover:shadow-xl transition-shadow 
+                   hover:ring-2 hover:ring-blue-500 hover:ring-opacity-20 cursor-pointer group"
+          >
             <div class="flex justify-between items-start">
               <div>
-                <h3 class="text-lg font-semibold text-gray-900">Week {currentFixture.week_number}</h3>
+                <h3 class="text-lg font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+                  Week {currentFixture.week_number}
+                </h3>
                 <p class="text-gray-700 font-medium">vs {currentFixture.opposition}</p>
                 <p class="text-sm text-gray-500 mt-1">
                   {new Date(currentFixture.match_date).toLocaleDateString('en-GB')} • 
                   {currentFixture.venue === 'home' ? 'Home' : 'Away'}
+                </p>
+                <p class="text-xs text-blue-600 mt-2 group-hover:underline">
+                  Click to manage match →
                 </p>
               </div>
               <span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
                 Upcoming
               </span>
             </div>
-          </div>
+          </a>
         </section>
         
         <!-- Quick Actions -->
