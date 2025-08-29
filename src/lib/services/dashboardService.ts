@@ -11,7 +11,7 @@ export class DashboardService {
         .from('fixtures')
         .select('*')
         .eq('league_year', '2025/26')
-        .eq('status', 'to_play')
+        .eq('result', 'to_play')
         .order('week_number', { ascending: true })
         .limit(1)
         .single();
@@ -41,7 +41,7 @@ export class DashboardService {
         .from('fixtures')
         .select('*')
         .eq('league_year', '2025/26')
-        .eq('status', 'to_play')
+        .eq('result', 'to_play')
         .order('week_number', { ascending: true })
         .limit(limit);
       
@@ -83,7 +83,7 @@ export class DashboardService {
         .from('fixtures')
         .select('id')
         .eq('league_year', '2025/26')
-        .eq('status', 'to_play');
+        .eq('result', 'to_play');
       
       if (remainingError) {
         console.error('Error fetching remaining fixtures:', remainingError);
@@ -232,7 +232,7 @@ async getCurrentWeek(): Promise<number> {
       .from('fixtures')
       .select('week_number')
       .eq('league_year', '2025/26')
-      .eq('status', 'to_play')
+      .eq('result', 'to_play')
       .order('week_number', { ascending: true })
       .limit(1)
       .single();
@@ -271,7 +271,7 @@ async getCurrentWeek(): Promise<number> {
         .from('fixtures')
         .select('*')
         .eq('league_year', '2025/26')
-        .eq('status', 'completed')
+        .eq('result', 'completed')
         .order('week_number', { ascending: false })
         .limit(limit);
       
