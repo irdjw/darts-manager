@@ -6,11 +6,18 @@
   import { createBrowserClient, isBrowser, parse } from '@supabase/ssr';
   import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
   import MobileNavigation from '$lib/components/MobileNavigation.svelte';
+  import KeyboardHelp from '$lib/components/KeyboardHelp.svelte';
+  import ErrorBoundary from '$lib/components/ErrorBoundary.svelte';
+  import { registerServiceWorker, setupInstallPrompt, setupOfflineSync, onNetworkChange } from '$lib/utils/pwa';
+  import { initPerformanceMonitoring } from '$lib/utils/performance';
   
   export let data;
   
   let supabase: any;
   let mobileMenuOpen = false;
+  let isOnline = true;
+  let showInstallPrompt = false;
+  let showUpdateNotification = false;
   
   // Get user role from session data
   $: userRole = data?.session?.user?.user_metadata?.role || 'player';
@@ -51,8 +58,50 @@
       }
     });
 
+    // Setup PWA features
+    setupPWA();
+    
+    // Initialize performance monitoring
+    initPerformanceMonitoring();
+    
     return () => subscription.unsubscribe();
   });
+
+  async function setupPWA() {
+    // Register service worker
+    await registerServiceWorker();
+    
+    // Setup install prompt
+    setupInstallPrompt();
+    
+    // Setup offline sync
+    setupOfflineSync();
+    
+    // Monitor network status
+    const cleanup = onNetworkChange((online) => {
+      isOnline = online;
+      if (!online) {
+        console.log('App went offline');
+      } else {
+        console.log('App came back online');
+      }
+    });
+    
+    // PWA event listeners
+    window.addEventListener('pwa-installable', () => {
+      showInstallPrompt = true;
+    });
+    
+    window.addEventListener('pwa-installed', () => {
+      showInstallPrompt = false;
+    });
+    
+    window.addEventListener('pwa-update-available', () => {
+      showUpdateNotification = true;
+    });
+    
+    return cleanup;
+  }
 
   function toggleMobileMenu() {
     mobileMenuOpen = !mobileMenuOpen;
@@ -105,7 +154,49 @@
   {/if}
   
   <!-- Main Content -->
-  <main class="flex-1">
-    <slot />
-  </main>
+  <ErrorBoundary>
+    <main class="flex-1" id="main-content">
+      <slot />
+    </main>
+  </ErrorBoundary>
+  
+  <!-- Global Components -->
+  <KeyboardHelp />
+  
+  <!-- Network Status Indicator -->
+  {#if !isOnline}
+    <div class="fixed bottom-4 left-4 right-4 bg-orange-100 border border-orange-200 rounded-lg p-3 z-40">
+      <div class="flex items-center space-x-2">
+        <svg class="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                d="M18.364 5.636l-12.728 12.728m0-12.728l12.728 12.728" />
+        </svg>
+        <span class="text-orange-800 text-sm font-medium">You're offline</span>
+        <span class="text-orange-600 text-xs">Some features may be limited</span>
+      </div>
+    </div>
+  {/if}
+  
+  <!-- PWA Install Prompt -->
+  {#if showInstallPrompt}
+    <div class="fixed bottom-4 left-4 right-4 bg-blue-100 border border-blue-200 rounded-lg p-3 z-40">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+          <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                  d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+          </svg>
+          <span class="text-blue-800 text-sm font-medium">Install app for better experience</span>
+        </div>
+        <button
+          on:click={() => showInstallPrompt = false}
+          class="text-blue-600 hover:text-blue-700 p-1"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  {/if}
 </div>

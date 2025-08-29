@@ -1,8 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import QuickActions from '$lib/components/QuickActions.svelte';
+  import type { PageData } from './$types';
+  
+  export let data: PageData;
   
   let loading = true;
+  
+  $: userRole = data?.userRole || 'player';
   let currentFixture = {
     week_number: 1,
     opposition: 'Sample Team',
@@ -37,9 +42,35 @@
           <span class="text-white text-sm font-bold">IW</span>
         </div>
         <div>
-          <h1 class="text-lg font-bold text-gray-900">Dashboard</h1>
+          <div class="flex items-center space-x-2">
+            <h1 class="text-lg font-bold text-gray-900">Dashboard</h1>
+            <span class="px-2 py-1 text-xs font-medium rounded-full capitalize
+                        {userRole === 'super_admin' ? 'bg-purple-100 text-purple-800' :
+                         userRole === 'admin' ? 'bg-red-100 text-red-800' :
+                         userRole === 'captain' ? 'bg-blue-100 text-blue-800' :
+                         'bg-gray-100 text-gray-800'}">
+              {userRole.replace('_', ' ')}
+            </span>
+          </div>
           <p class="text-sm text-gray-500 hidden lg:block">Isaac Wilson Darts Team</p>
         </div>
+      </div>
+      
+      <!-- Logout button for larger screens -->
+      <div class="hidden lg:block">
+        <form action="/logout" method="post">
+          <button
+            type="submit"
+            class="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg 
+                   text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                    d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            <span>Sign Out</span>
+          </button>
+        </form>
       </div>
     </div>
   </header>
@@ -84,7 +115,7 @@
         <!-- Quick Actions -->
         <section>
           <h2 class="text-lg font-semibold text-gray-900 mb-3">Quick Actions</h2>
-          <QuickActions />
+          <QuickActions {userRole} />
         </section>
         
         <!-- Stats -->
