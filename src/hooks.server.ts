@@ -51,6 +51,7 @@ export const handle: Handle = async ({ event, resolve }) => {
       '/admin/users': ['super_admin'],
       '/admin/players': ['admin', 'super_admin'],
       '/admin/fixtures': ['admin', 'super_admin'],
+      '/admin/results': ['admin', 'super_admin'],
       '/team': ['captain', 'admin', 'super_admin'],
       '/team-selection': ['captain', 'admin', 'super_admin'],
     };

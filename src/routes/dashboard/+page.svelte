@@ -79,7 +79,7 @@
       </div>
       
       <!-- Controls for larger screens -->
-      <div class="hidden lg:flex lg:items-center lg:space-x-3">
+      <div class="flex items-center space-x-3">
         <!-- Impersonation controls for super admin -->
         {#if originalRole === 'super_admin' && !isImpersonating}
           <button
@@ -145,7 +145,7 @@
           <h2 class="text-lg font-semibold text-gray-900 mb-3">Next Match</h2>
           {#if currentFixture}
             <a 
-              href="/match/{currentFixture.id || 'current'}"
+              href="/match/{currentFixture.id}"
               class="block bg-white p-4 rounded-lg shadow-lg hover:shadow-xl transition-shadow 
                      hover:ring-2 hover:ring-blue-500 hover:ring-opacity-20 cursor-pointer group"
             >

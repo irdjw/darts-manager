@@ -360,13 +360,13 @@
             >
               👥 Manage Players
             </button>
-            <button
+            <a
+              href="/admin/results"
               class="bg-orange-600 hover:bg-orange-700 text-white p-4 rounded-lg font-medium
-                     min-h-[44px] transition-all touch-manipulation"
-              on:click={() => alert('Season management coming soon!')}
+                     min-h-[44px] transition-all touch-manipulation flex items-center justify-center text-center"
             >
-              ⚙️ Season Settings
-            </button>
+              🏆 Input Results
+            </a>
           </div>
         </div>
       </section>
