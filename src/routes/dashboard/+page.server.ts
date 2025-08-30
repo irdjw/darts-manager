@@ -2,7 +2,15 @@ import type { PageServerLoad } from './$types';
 import { getEffectiveUserRole } from '$lib/utils/impersonation';
 
 export const load: PageServerLoad = async ({ locals, cookies }) => {
-  const session = await locals.getSession();
+  // Get session from Supabase client
+  const {
+    data: { session },
+    error
+  } = await locals.supabase.auth.getSession();
+  
+  if (error) {
+    console.error('Dashboard session error:', error);
+  }
   
   if (!session?.user) {
     // For now, return a default user role instead of redirecting

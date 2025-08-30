@@ -2,7 +2,14 @@ import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
-  const session = await locals.getSession();
+  const {
+    data: { session },
+    error: sessionError
+  } = await locals.supabase.auth.getSession();
+  
+  if (sessionError) {
+    console.error('Team session error:', sessionError);
+  }
   
   if (!session?.user) {
     throw error(401, 'Authentication required');

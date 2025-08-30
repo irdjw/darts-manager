@@ -36,32 +36,14 @@ declare global {
       details?: any;
     }
 
-    declare global {
-  namespace App {
-    interface Locals {
-      supabase: SupabaseClient;
-      user?: User;
-      userRole?: string;
-    }
-    
-    interface PageData {
-      session: import('@supabase/supabase-js').Session | null;
-      user: User | null;
-      userRole?: string;
-      supabase: SupabaseClient;
-    }
-  }
-}
-
-export {};
     interface Locals {
       supabase: SupabaseClient;
       user?: User;
       userRole?: UserRole['role'];
-      getUser(): Promise<User | null>;
     }
 
     interface PageData {
+      session: import('@supabase/supabase-js').Session | null;
       user: User | null;
       userRole?: UserRole['role'];
       players?: Player[];
