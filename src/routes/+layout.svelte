@@ -3,8 +3,8 @@
   import { onMount } from 'svelte';
   import { invalidate } from '$app/navigation';
   import { page } from '$app/stores';
-  import { createBrowserClient, isBrowser, parse } from '@supabase/ssr';
-  import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
+  import { browser } from '$app/environment';
+  import { getSupabaseBrowserClient } from '$lib/utils/supabase-browser';
   import MobileNavigation from '$lib/components/MobileNavigation.svelte';
   import KeyboardHelp from '$lib/components/KeyboardHelp.svelte';
   import ErrorBoundary from '$lib/components/ErrorBoundary.svelte';
@@ -27,37 +27,28 @@
   
   // Initialize Supabase client-side
   onMount(() => {
-    supabase = createBrowserClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
-      global: {
-        fetch,
-      },
-      cookies: {
-        get(name) {
-          if (!isBrowser) return undefined;
-          return parse(document.cookie)[name];
-        },
-        set(name, value, options) {
-          if (!isBrowser) return;
-          document.cookie = `${name}=${value}; path=/; ${options?.maxAge ? `max-age=${options.maxAge}` : ''}`;
-        },
-        remove(name, options) {
-          if (!isBrowser) return;
-          document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
-        },
-      },
-    });
+    if (!browser) return;
+    
+    try {
+      supabase = getSupabaseBrowserClient();
+    } catch (error) {
+      console.error('Failed to initialize Supabase client:', error);
+      return;
+    }
 
     // Handle auth state changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('Auth state changed:', event);
-      
-      if (session?.expires_at !== data.session?.expires_at) {
-        // Invalidate data when auth state changes
-        invalidate('supabase:auth');
-      }
-    });
+    let subscription: any = null;
+    if (supabase && supabase.auth) {
+      const authListener = supabase.auth.onAuthStateChange((event, session) => {
+        console.log('Auth state changed:', event);
+        
+        if (session?.expires_at !== data.session?.expires_at) {
+          // Invalidate data when auth state changes
+          invalidate('supabase:auth');
+        }
+      });
+      subscription = authListener.data?.subscription || authListener;
+    }
 
     // Setup PWA features
     setupPWA();
@@ -65,7 +56,11 @@
     // Initialize performance monitoring
     initPerformanceMonitoring();
     
-    return () => subscription.unsubscribe();
+    return () => {
+      if (subscription && typeof subscription.unsubscribe === 'function') {
+        subscription.unsubscribe();
+      }
+    };
   });
 
   async function setupPWA() {

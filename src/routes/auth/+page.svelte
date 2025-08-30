@@ -1,22 +1,42 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import { supabase } from '$lib/database/supabase';
+  import { browser } from '$app/environment';
+  import { createSupabaseAuthHandler } from '$lib/utils/supabase-browser';
   
   let loading = false;
   let error: string | null = null;
   let email = '';
   let password = '';
+  let authHandler: any = null;
   
   onMount(async () => {
-    // Check if user is already logged in
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) {
-      goto('/dashboard');
+    if (!browser) return;
+    
+    try {
+      authHandler = createSupabaseAuthHandler();
+      if (!authHandler) {
+        error = 'Authentication system not available';
+        return;
+      }
+      
+      // Check if user is already logged in
+      const { session } = await authHandler.getSession();
+      if (session) {
+        goto('/dashboard');
+      }
+    } catch (err) {
+      console.error('Auth initialization error:', err);
+      error = 'Failed to initialize authentication';
     }
   });
   
   async function handleLogin() {
+    if (!authHandler) {
+      error = 'Authentication system not available';
+      return;
+    }
+    
     if (!email || !password) {
       error = 'Please enter both email and password';
       return;
@@ -26,18 +46,16 @@
     error = null;
     
     try {
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
+      const { data, error: authError } = await authHandler.signIn(email, password);
       
       if (authError) {
         error = authError.message;
-      } else if (data.user) {
+      } else if (data?.user) {
         // Redirect to dashboard on successful login
-        goto('/dashboard');
+        await goto('/dashboard');
       }
     } catch (err) {
+      console.error('Login error:', err);
       error = err instanceof Error ? err.message : 'Login failed';
     } finally {
       loading = false;
@@ -45,6 +63,11 @@
   }
   
   async function handleDemoLogin(role: 'player' | 'captain' | 'admin' | 'super_admin') {
+    if (!authHandler) {
+      error = 'Authentication system not available';
+      return;
+    }
+    
     loading = true;
     error = null;
     
@@ -58,16 +81,18 @@
         super_admin: { email: 'superadmin@demo.com', password: 'demo123' }
       };
       
-      const { data, error: authError } = await supabase.auth.signInWithPassword(
-        demoCredentials[role]
+      const { data, error: authError } = await authHandler.signIn(
+        demoCredentials[role].email,
+        demoCredentials[role].password
       );
       
       if (authError) {
         error = `Demo ${role} login failed: ${authError.message}`;
-      } else {
-        goto('/dashboard');
+      } else if (data?.user) {
+        await goto('/dashboard');
       }
     } catch (err) {
+      console.error('Demo login error:', err);
       error = `Demo login failed: ${err instanceof Error ? err.message : 'Unknown error'}`;
     } finally {
       loading = false;

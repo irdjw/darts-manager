@@ -47,12 +47,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 
   // Define route protections
   const path = event.url.pathname;
-  const publicRoutes = ['/', '/login'];
+  const publicRoutes = ['/', '/auth', '/login', '/offline'];
   const requiresAuth = !publicRoutes.includes(path);
 
   // Handle authentication redirects
   if (requiresAuth && !session?.user) {
-    throw redirect(302, `/login?redirect=${encodeURIComponent(path)}`);
+    throw redirect(302, `/auth?redirect=${encodeURIComponent(path)}`);
   }
 
   // Handle role-based access (only for authenticated users)

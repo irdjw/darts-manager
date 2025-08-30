@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { browser } from '$app/environment';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 
 // Validate environment variables
@@ -10,6 +11,7 @@ if (!PUBLIC_SUPABASE_URL.startsWith('https://')) {
   throw new Error('Invalid Supabase URL format. Must start with https://');
 }
 
+// Create browser-safe Supabase client
 export const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
   auth: {
     persistSession: true,
@@ -27,30 +29,32 @@ export const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_K
   }
 });
 
-// Test connection on initialization with retry logic
-let connectionRetries = 0;
-const maxRetries = 3;
+// Only test connection in browser environment
+if (browser) {
+  let connectionRetries = 0;
+  const maxRetries = 3;
 
-const testConnection = async () => {
-  try {
-    const { error } = await supabase.from('players').select('count').limit(1);
-    if (error) {
-      throw error;
+  const testConnection = async () => {
+    try {
+      const { error } = await supabase.from('players').select('count').limit(1);
+      if (error) {
+        throw error;
+      }
+      console.log('Supabase connected successfully');
+    } catch (error) {
+      connectionRetries++;
+      console.error(`Supabase connection failed (attempt ${connectionRetries}/${maxRetries}):`, error);
+      
+      if (connectionRetries < maxRetries) {
+        setTimeout(testConnection, 1000 * connectionRetries); // Exponential backoff
+      } else {
+        console.error('Supabase connection failed after maximum retries');
+      }
     }
-    console.log('Supabase connected successfully');
-  } catch (error) {
-    connectionRetries++;
-    console.error(`Supabase connection failed (attempt ${connectionRetries}/${maxRetries}):`, error);
-    
-    if (connectionRetries < maxRetries) {
-      setTimeout(testConnection, 1000 * connectionRetries); // Exponential backoff
-    } else {
-      console.error('Supabase connection failed after maximum retries');
-    }
-  }
-};
+  };
 
-testConnection();
+  testConnection();
+}
 
 export function handleDatabaseError(error: any): string {
   // Handle common PostgreSQL error codes
