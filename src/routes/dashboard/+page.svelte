@@ -13,25 +13,44 @@
   let error = '';
   let currentFixture: Fixture | null = null;
   let stats: DashboardStats | null = null;
+  let allFixtures: Fixture[] = [];
+  let currentFixtureIndex = 0;
   
   const dashboardService = new DashboardService();
+  
+  // Touch/swipe handling
+  let touchStartX = 0;
+  let touchEndX = 0;
+  let fixtureCard: HTMLElement;
   
   $: userRole = data?.userRole || 'player';
   $: originalRole = data?.originalRole || 'player';
   $: isImpersonating = data?.isImpersonating || false;
   
   onMount(async () => {
+    await loadData();
+  });
+  
+  async function loadData() {
     try {
       loading = true;
       error = '';
       
       // Fetch real data from Supabase
-      const [fixtureData, statsData] = await Promise.all([
-        dashboardService.getCurrentFixture(),
+      const [allFixturesData, statsData] = await Promise.all([
+        dashboardService.getAllFixtures(),
         dashboardService.getSeasonStats()
       ]);
       
-      currentFixture = fixtureData;
+      allFixtures = allFixturesData || [];
+      // Find current fixture (next upcoming match)
+      const now = new Date();
+      currentFixtureIndex = allFixtures.findIndex(f => 
+        f.status === 'scheduled' && new Date(f.match_date) >= now
+      );
+      if (currentFixtureIndex === -1) currentFixtureIndex = 0;
+      
+      currentFixture = allFixtures[currentFixtureIndex] || null;
       stats = statsData;
       
       console.log('Dashboard data loaded:', { currentFixture, stats });
@@ -42,7 +61,49 @@
     } finally {
       loading = false;
     }
-  });
+  }
+  
+  function handleTouchStart(event: TouchEvent) {
+    touchStartX = event.changedTouches[0].screenX;
+  }
+  
+  function handleTouchEnd(event: TouchEvent) {
+    touchEndX = event.changedTouches[0].screenX;
+    handleSwipe();
+  }
+  
+  function handleSwipe() {
+    const swipeThreshold = 50;
+    const swipeDistance = touchEndX - touchStartX;
+    
+    if (Math.abs(swipeDistance) > swipeThreshold) {
+      if (swipeDistance > 0) {
+        // Swiped right - show previous fixture
+        showPreviousFixture();
+      } else {
+        // Swiped left - show next fixture
+        showNextFixture();
+      }
+    }
+  }
+  
+  function showPreviousFixture() {
+    if (allFixtures.length > 1) {
+      currentFixtureIndex = currentFixtureIndex > 0 
+        ? currentFixtureIndex - 1 
+        : allFixtures.length - 1;
+      currentFixture = allFixtures[currentFixtureIndex];
+    }
+  }
+  
+  function showNextFixture() {
+    if (allFixtures.length > 1) {
+      currentFixtureIndex = currentFixtureIndex < allFixtures.length - 1 
+        ? currentFixtureIndex + 1 
+        : 0;
+      currentFixture = allFixtures[currentFixtureIndex];
+    }
+  }
 </script>
 
 <svelte:head>
@@ -140,37 +201,79 @@
       </div>
     {:else}
       <div class="space-y-6">
-        <!-- Next Match -->
+        <!-- Match Fixtures (Swipeable) -->
         <section>
-          <h2 class="text-lg font-semibold text-gray-900 mb-3">Next Match</h2>
-          {#if currentFixture}
-            <a 
-              href="/match/{currentFixture.id}"
-              class="block bg-white p-4 rounded-lg shadow-lg hover:shadow-xl transition-shadow 
-                     hover:ring-2 hover:ring-blue-500 hover:ring-opacity-20 cursor-pointer group"
-            >
-              <div class="flex justify-between items-start">
-                <div>
-                  <h3 class="text-lg font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
-                    Week {currentFixture.week_number}
-                  </h3>
-                  <p class="text-gray-700 font-medium">vs {currentFixture.opposition || 'TBD'}</p>
-                  <p class="text-sm text-gray-500 mt-1">
-                    {currentFixture.match_date ? new Date(currentFixture.match_date).toLocaleDateString('en-GB') : 'Date TBD'} • 
-                    {currentFixture.venue === 'home' ? 'Home' : 'Away'}
-                  </p>
-                  <p class="text-xs text-blue-600 mt-2 group-hover:underline">
-                    Click to manage match →
-                  </p>
-                </div>
-                <span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
-                  Upcoming
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-lg font-semibold text-gray-900">Match Fixtures</h2>
+            {#if allFixtures.length > 1}
+              <div class="flex items-center space-x-2">
+                <button
+                  on:click={showPreviousFixture}
+                  class="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                  aria-label="Previous fixture"
+                >
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <span class="text-sm text-gray-500">
+                  {currentFixtureIndex + 1} of {allFixtures.length}
                 </span>
+                <button
+                  on:click={showNextFixture}
+                  class="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                  aria-label="Next fixture"
+                >
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
               </div>
-            </a>
+            {/if}
+          </div>
+          
+          {#if currentFixture}
+            <div
+              bind:this={fixtureCard}
+              on:touchstart={handleTouchStart}
+              on:touchend={handleTouchEnd}
+              class="touch-none select-none"
+            >
+              <a 
+                href="/match/{currentFixture.id}"
+                class="block bg-white p-4 rounded-lg shadow-lg hover:shadow-xl transition-all 
+                       hover:ring-2 hover:ring-blue-500 hover:ring-opacity-20 cursor-pointer group"
+              >
+                <div class="flex justify-between items-start">
+                  <div>
+                    <h3 class="text-lg font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+                      Week {currentFixture.week_number}
+                    </h3>
+                    <p class="text-gray-700 font-medium">vs {currentFixture.opposition || 'TBD'}</p>
+                    <p class="text-sm text-gray-500 mt-1">
+                      {currentFixture.match_date ? new Date(currentFixture.match_date).toLocaleDateString('en-GB') : 'Date TBD'} • 
+                      {currentFixture.venue === 'home' ? 'Home' : 'Away'}
+                    </p>
+                    <p class="text-xs text-blue-600 mt-2 group-hover:underline">
+                      {allFixtures.length > 1 ? 'Swipe or click to manage match →' : 'Click to manage match →'}
+                    </p>
+                  </div>
+                  <div class="text-right">
+                    <span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium block mb-2">
+                      {currentFixture.status === 'scheduled' ? 'Upcoming' : 
+                       currentFixture.status === 'completed' ? 'Completed' : 
+                       currentFixture.status === 'in_progress' ? 'In Progress' : 'To Play'}
+                    </span>
+                    {#if allFixtures.length > 1}
+                      <p class="text-xs text-gray-400">Swipe to navigate</p>
+                    {/if}
+                  </div>
+                </div>
+              </a>
+            </div>
           {:else}
             <div class="bg-white p-4 rounded-lg shadow-lg">
-              <p class="text-gray-500 text-center">No upcoming fixtures found</p>
+              <p class="text-gray-500 text-center">No fixtures found</p>
             </div>
           {/if}
         </section>

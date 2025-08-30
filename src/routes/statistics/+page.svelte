@@ -19,11 +19,13 @@
   let selectedPlayer: Player | null = null;
   let seasonStats = {
     totalGames: 0,
+    matchesPlayed: 0,
     totalWins: 0,
     totalLosses: 0,
     winPercentage: 0,
+    teamAverage: 0,
     total180s: 0,
-    averageScore: 0,
+    maximumScores: 0,
     topPerformer: null as Player | null,
     mostImproved: null as Player | null
   };
@@ -67,12 +69,20 @@
     const activePlayers = players.filter(p => !p.drop_week);
     
     seasonStats.totalGames = players.reduce((sum, p) => sum + (p.games_played || 0), 0);
+    seasonStats.matchesPlayed = Math.floor(seasonStats.totalGames / 7); // Assuming 7 games per match
     seasonStats.totalWins = players.reduce((sum, p) => sum + (p.games_won || 0), 0);
     seasonStats.totalLosses = players.reduce((sum, p) => sum + (p.games_lost || 0), 0);
     seasonStats.winPercentage = seasonStats.totalGames > 0 
       ? (seasonStats.totalWins / seasonStats.totalGames) * 100 
       : 0;
     seasonStats.total180s = players.reduce((sum, p) => sum + (p.total_180s || 0), 0);
+    seasonStats.maximumScores = seasonStats.total180s; // 180s are the maximum scores
+    
+    // Calculate team average (average win percentage of active players)
+    const activePlayersWithGames = activePlayers.filter(p => (p.games_played || 0) > 0);
+    seasonStats.teamAverage = activePlayersWithGames.length > 0
+      ? activePlayersWithGames.reduce((sum, p) => sum + (p.win_percentage || 0), 0) / activePlayersWithGames.length
+      : 0;
     
     // Find top performer (highest win percentage with minimum 3 games)
     seasonStats.topPerformer = players
@@ -160,31 +170,43 @@
       <!-- Season Overview Cards -->
       <section class="mb-8">
         <h2 class="text-lg font-semibold text-gray-900 mb-4">Season Overview</h2>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
           <StatsCard
             title="Total Games"
             value={seasonStats.totalGames.toString()}
-            subtitle="Matches played"
+            subtitle="Individual games"
             icon="🎯"
+          />
+          <StatsCard
+            title="Matches Played"
+            value={seasonStats.matchesPlayed.toString()}
+            subtitle="Team fixtures"
+            icon="📅"
           />
           <StatsCard
             title="Win Rate"
             value={formatPercentage(seasonStats.winPercentage)}
-            subtitle="Team average"
+            subtitle="Overall percentage"
             icon="🏆"
             trend="up"
           />
           <StatsCard
+            title="Team Average"
+            value={formatPercentage(seasonStats.teamAverage)}
+            subtitle="Player average"
+            icon="📊"
+          />
+          <StatsCard
             title="Total 180s"
             value={seasonStats.total180s.toString()}
-            subtitle="Maximum scores"
+            subtitle="Perfect scores"
             icon="🎖️"
           />
           <StatsCard
-            title="Active Players"
-            value={players.filter(p => !p.drop_week).length.toString()}
-            subtitle="Available for selection"
-            icon="👥"
+            title="Maximum Scores"
+            value={seasonStats.maximumScores.toString()}
+            subtitle="180 finishes"
+            icon="⭐"
           />
         </div>
       </section>
