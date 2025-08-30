@@ -15,10 +15,12 @@ export const load: PageServerLoad = async ({ locals }) => {
     throw error(401, 'Authentication required');
   }
   
-  const userRole = session.user.user_metadata?.role || 'player';
+  // Use the userRole from locals (set by hooks.server.ts) for consistency
+  const userRole = locals.userRole || session.user.user_metadata?.role || 'player';
   
   // Allow only admins and super_admins to access admin panel
   if (!['admin', 'super_admin'].includes(userRole)) {
+    console.error(`Admin access denied for user role: ${userRole}`);
     throw error(403, 'Access denied: Admin privileges required');
   }
   

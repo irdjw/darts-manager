@@ -29,20 +29,9 @@ export const handle: Handle = async ({ event, resolve }) => {
     // Attach user to event
     event.locals.user = session.user;
     
-    // Fetch user role
-    try {
-      const { data: roleData } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', session.user.id)
-        .single();
-      
-      userRole = roleData?.role || 'player';
-      event.locals.userRole = userRole;
-    } catch (err) {
-      console.warn('Failed to fetch user role:', err);
-      event.locals.userRole = 'player';
-    }
+    // Get user role from user_metadata (consistent with auth system)
+    userRole = session.user.user_metadata?.role || 'player';
+    event.locals.userRole = userRole;
   }
 
   // Define route protections
@@ -63,11 +52,29 @@ export const handle: Handle = async ({ event, resolve }) => {
       '/admin/players': ['admin', 'super_admin'],
       '/admin/fixtures': ['admin', 'super_admin'],
       '/team': ['captain', 'admin', 'super_admin'],
-      '/team/selection': ['captain', 'admin', 'super_admin'],
+      '/team-selection': ['captain', 'admin', 'super_admin'],
     };
 
-    const requiredRoles = rolePermissions[path];
+    // Check for dynamic routes using startsWith
+    let requiredRoles: string[] | undefined;
+    
+    // Check exact matches first
+    if (rolePermissions[path]) {
+      requiredRoles = rolePermissions[path];
+    }
+    // Check dynamic route patterns
+    else if (path.startsWith('/match/')) {
+      requiredRoles = ['captain', 'admin', 'super_admin'];
+    }
+    else if (path.startsWith('/scoring/')) {
+      requiredRoles = ['captain', 'admin', 'super_admin'];
+    }
+    else if (path.startsWith('/team-selection/')) {
+      requiredRoles = ['captain', 'admin', 'super_admin'];
+    }
+
     if (requiredRoles && !requiredRoles.includes(userRole)) {
+      console.warn(`Access denied: User role '${userRole}' cannot access '${path}'. Required roles: ${requiredRoles.join(', ')}`);
       // Redirect to appropriate dashboard
       const redirectPath = getUserDashboard(userRole);
       throw redirect(302, redirectPath);
