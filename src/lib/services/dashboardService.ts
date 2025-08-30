@@ -58,6 +58,29 @@ export class DashboardService {
   }
   
   /**
+   * Get all fixtures for the current season
+   */
+  async getAllFixtures(): Promise<Fixture[]> {
+    try {
+      const { data, error } = await supabase
+        .from('fixtures')
+        .select('*')
+        .eq('league_year', '2025/26')
+        .order('week_number', { ascending: true });
+      
+      if (error) {
+        console.error('Error fetching all fixtures:', error);
+        throw error;
+      }
+      
+      return data || [];
+    } catch (err: any) {
+      console.error('getAllFixtures error:', err);
+      throw new Error(handleDatabaseError(err));
+    }
+  }
+  
+  /**
    * Get comprehensive season statistics
    */
   async getSeasonStats(): Promise<DashboardStats> {
