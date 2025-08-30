@@ -21,9 +21,11 @@
   let showImpersonationPanel = false;
   
   // Get user role from session data
-  $: userRole = data?.session?.user?.user_metadata?.role || 'player';
+  $: userRole = data?.userRole || data?.session?.user?.user_metadata?.role || 'player';
   $: isAuthenticated = !!data?.session?.user;
   $: isAuthPage = $page.route.id === '/auth' || $page.route.id === '/';
+  $: originalRole = data?.originalRole || userRole;
+  $: isImpersonating = data?.isImpersonating || false;
   
   // Initialize Supabase client-side
   onMount(() => {
@@ -113,8 +115,8 @@
   {#if isAuthenticated && !isAuthPage}
     <MobileNavigation 
       {userRole} 
-      originalRole={userRole}
-      isImpersonating={false}
+      {originalRole}
+      {isImpersonating}
       isOpen={mobileMenuOpen} 
       on:close={closeMobileMenu}
       on:show-impersonation={() => showImpersonationPanel = true}

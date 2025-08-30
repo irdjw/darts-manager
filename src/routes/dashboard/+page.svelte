@@ -1,34 +1,47 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { DashboardService } from '$lib/services/dashboardService';
   import QuickActions from '$lib/components/QuickActions.svelte';
   import ImpersonationPanel from '$lib/components/ImpersonationPanel.svelte';
   import type { PageData } from './$types';
+  import type { Fixture, DashboardStats } from '$lib/types/dashboard';
   
   export let data: PageData;
   
   let loading = true;
   let showImpersonationPanel = false;
+  let error = '';
+  let currentFixture: Fixture | null = null;
+  let stats: DashboardStats | null = null;
+  
+  const dashboardService = new DashboardService();
   
   $: userRole = data?.userRole || 'player';
   $: originalRole = data?.originalRole || 'player';
   $: isImpersonating = data?.isImpersonating || false;
-  let currentFixture = {
-    week_number: 1,
-    opposition: 'Sample Team',
-    match_date: '2025-01-15',
-    venue: 'home'
-  };
   
-  let stats = {
-    current_position: 1,
-    win_percentage: 75,
-    games_won: 12,
-    games_lost: 4,
-    remaining_fixtures: 15
-  };
-  
-  onMount(() => {
-    setTimeout(() => loading = false, 500);
+  onMount(async () => {
+    try {
+      loading = true;
+      error = '';
+      
+      // Fetch real data from Supabase
+      const [fixtureData, statsData] = await Promise.all([
+        dashboardService.getCurrentFixture(),
+        dashboardService.getSeasonStats()
+      ]);
+      
+      currentFixture = fixtureData;
+      stats = statsData;
+      
+      console.log('Dashboard data loaded:', { currentFixture, stats });
+      
+    } catch (err: any) {
+      console.error('Dashboard load error:', err);
+      error = err.message || 'Failed to load dashboard data';
+    } finally {
+      loading = false;
+    }
   });
 </script>
 
@@ -118,35 +131,48 @@
         <div class="animate-spin rounded-full h-8 w-8 border-2 border-blue-500 border-t-transparent"></div>
         <span class="ml-3 text-gray-600">Loading dashboard...</span>
       </div>
+    {:else if error}
+      <div class="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
+        <div class="flex items-center">
+          <div class="text-red-400 mr-3">⚠️</div>
+          <p class="text-sm text-red-800">{error}</p>
+        </div>
+      </div>
     {:else}
       <div class="space-y-6">
         <!-- Next Match -->
         <section>
           <h2 class="text-lg font-semibold text-gray-900 mb-3">Next Match</h2>
-          <a 
-            href="/match/{currentFixture.id || 'current'}"
-            class="block bg-white p-4 rounded-lg shadow-lg hover:shadow-xl transition-shadow 
-                   hover:ring-2 hover:ring-blue-500 hover:ring-opacity-20 cursor-pointer group"
-          >
-            <div class="flex justify-between items-start">
-              <div>
-                <h3 class="text-lg font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
-                  Week {currentFixture.week_number}
-                </h3>
-                <p class="text-gray-700 font-medium">vs {currentFixture.opposition}</p>
-                <p class="text-sm text-gray-500 mt-1">
-                  {new Date(currentFixture.match_date).toLocaleDateString('en-GB')} • 
-                  {currentFixture.venue === 'home' ? 'Home' : 'Away'}
-                </p>
-                <p class="text-xs text-blue-600 mt-2 group-hover:underline">
-                  Click to manage match →
-                </p>
+          {#if currentFixture}
+            <a 
+              href="/match/{currentFixture.id || 'current'}"
+              class="block bg-white p-4 rounded-lg shadow-lg hover:shadow-xl transition-shadow 
+                     hover:ring-2 hover:ring-blue-500 hover:ring-opacity-20 cursor-pointer group"
+            >
+              <div class="flex justify-between items-start">
+                <div>
+                  <h3 class="text-lg font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+                    Week {currentFixture.week_number}
+                  </h3>
+                  <p class="text-gray-700 font-medium">vs {currentFixture.opposition || 'TBD'}</p>
+                  <p class="text-sm text-gray-500 mt-1">
+                    {currentFixture.match_date ? new Date(currentFixture.match_date).toLocaleDateString('en-GB') : 'Date TBD'} • 
+                    {currentFixture.venue === 'home' ? 'Home' : 'Away'}
+                  </p>
+                  <p class="text-xs text-blue-600 mt-2 group-hover:underline">
+                    Click to manage match →
+                  </p>
+                </div>
+                <span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+                  Upcoming
+                </span>
               </div>
-              <span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
-                Upcoming
-              </span>
+            </a>
+          {:else}
+            <div class="bg-white p-4 rounded-lg shadow-lg">
+              <p class="text-gray-500 text-center">No upcoming fixtures found</p>
             </div>
-          </a>
+          {/if}
         </section>
         
         <!-- Quick Actions -->
@@ -158,22 +184,44 @@
         <!-- Stats -->
         <section>
           <h2 class="text-lg font-semibold text-gray-900 mb-3">Season Overview</h2>
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div class="bg-white p-4 rounded-lg shadow-lg text-center">
-              <p class="text-2xl font-bold text-blue-600">{stats.current_position}st</p>
-              <p class="text-sm text-gray-500">League Position</p>
+          {#if stats}
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div class="bg-white p-4 rounded-lg shadow-lg text-center">
+                <h3 class="text-lg font-semibold text-gray-900">League Position</h3>
+                <p class="text-3xl font-bold text-blue-600">{stats.current_position}</p>
+              </div>
+              
+              <div class="bg-white p-4 rounded-lg shadow-lg text-center">
+                <h3 class="text-lg font-semibold text-gray-900">Win Rate</h3>
+                <p class="text-3xl font-bold text-green-600">{stats.win_percentage}%</p>
+              </div>
+              
+              <div class="bg-white p-4 rounded-lg shadow-lg text-center">
+                <h3 class="text-lg font-semibold text-gray-900">Games Record</h3>
+                <p class="text-lg text-gray-700">{stats.games_won}W - {stats.games_lost}L</p>
+              </div>
             </div>
             
-            <div class="bg-white p-4 rounded-lg shadow-lg text-center">
-              <p class="text-2xl font-bold text-green-600">{stats.win_percentage}%</p>
-              <p class="text-sm text-gray-500">{stats.games_won}W / {stats.games_lost}L</p>
+            <!-- Additional Stats -->
+            <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="bg-white p-4 rounded-lg shadow-lg">
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">Remaining Fixtures</h3>
+                <p class="text-2xl font-bold text-orange-600">{stats.remaining_fixtures}</p>
+              </div>
+              
+              <div class="bg-white p-4 rounded-lg shadow-lg">
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">Top Performer</h3>
+                <p class="text-lg text-gray-700">{stats.top_performer?.name || 'N/A'}</p>
+                {#if stats.top_performer?.win_percentage}
+                  <p class="text-sm text-gray-500">{stats.top_performer.win_percentage}% win rate</p>
+                {/if}
+              </div>
             </div>
-            
-            <div class="bg-white p-4 rounded-lg shadow-lg text-center">
-              <p class="text-2xl font-bold text-orange-600">{stats.remaining_fixtures}</p>
-              <p class="text-sm text-gray-500">Fixtures Left</p>
+          {:else}
+            <div class="bg-white p-4 rounded-lg shadow-lg">
+              <p class="text-gray-500 text-center">No season statistics available</p>
             </div>
-          </div>
+          {/if}
         </section>
       </div>
     {/if}
