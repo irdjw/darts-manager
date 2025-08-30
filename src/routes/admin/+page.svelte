@@ -558,10 +558,11 @@
       
       <form on:submit|preventDefault={addPlayer}>
         <div class="mb-4">
-          <label class="block text-sm font-medium text-gray-700 mb-2">
+          <label for="new-player-name" class="block text-sm font-medium text-gray-700 mb-2">
             Player Name
           </label>
           <input
+            id="new-player-name"
             type="text"
             bind:value={newPlayerName}
             placeholder="Enter player name..."
@@ -601,10 +602,11 @@
       
       <form on:submit|preventDefault={addFixture}>
         <div class="mb-4">
-          <label class="block text-sm font-medium text-gray-700 mb-2">
+          <label for="fixture-week-number" class="block text-sm font-medium text-gray-700 mb-2">
             Week Number
           </label>
           <input
+            id="fixture-week-number"
             type="number"
             bind:value={newFixture.week_number}
             min="1"
@@ -616,10 +618,11 @@
         </div>
         
         <div class="mb-4">
-          <label class="block text-sm font-medium text-gray-700 mb-2">
+          <label for="fixture-opposition" class="block text-sm font-medium text-gray-700 mb-2">
             Opposition Team
           </label>
           <input
+            id="fixture-opposition"
             type="text"
             bind:value={newFixture.opposition}
             placeholder="Enter team name..."
@@ -630,10 +633,11 @@
         </div>
         
         <div class="mb-4">
-          <label class="block text-sm font-medium text-gray-700 mb-2">
+          <label for="fixture-date" class="block text-sm font-medium text-gray-700 mb-2">
             Match Date
           </label>
           <input
+            id="fixture-date"
             type="date"
             bind:value={newFixture.match_date}
             class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 
@@ -643,10 +647,11 @@
         </div>
         
         <div class="mb-4">
-          <label class="block text-sm font-medium text-gray-700 mb-2">
+          <label for="fixture-venue" class="block text-sm font-medium text-gray-700 mb-2">
             Venue
           </label>
           <select
+            id="fixture-venue"
             bind:value={newFixture.venue}
             class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 
                    focus:ring-blue-500 focus:border-blue-500"

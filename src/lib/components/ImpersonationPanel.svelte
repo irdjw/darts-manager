@@ -86,9 +86,11 @@
   <div 
     class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 px-4"
     on:click={handleBackdropClick}
+    on:keydown={(e) => e.key === 'Escape' && (visible = false)}
     role="dialog"
     aria-modal="true"
     aria-labelledby="impersonation-title"
+    tabindex="-1"
   >
     <!-- Modal Content -->
     <div class="bg-white rounded-lg shadow-2xl max-w-md w-full">

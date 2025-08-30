@@ -175,15 +175,15 @@ export class StatisticsService {
       const wonLegs = allLegs.filter(leg => leg.won);
       if (wonLegs.length > 0) {
         bestLeg = wonLegs.reduce((best, leg) => 
-          leg.totalDarts < best.totalDarts ? 
-          { legNumber: leg.legNumber, darts: leg.totalDarts } : best,
-          { legNumber: wonLegs[0].legNumber, darts: wonLegs[0].totalDarts }
+          leg.darts < best.darts ? 
+          { legNumber: leg.legNumber, darts: leg.darts } : best,
+          { legNumber: wonLegs[0].legNumber, darts: wonLegs[0].darts }
         );
 
         worstLeg = wonLegs.reduce((worst, leg) => 
-          leg.totalDarts > worst.totalDarts ? 
-          { legNumber: leg.legNumber, darts: leg.totalDarts } : worst,
-          { legNumber: wonLegs[0].legNumber, darts: wonLegs[0].totalDarts }
+          leg.darts > worst.darts ? 
+          { legNumber: leg.legNumber, darts: leg.darts } : worst,
+          { legNumber: wonLegs[0].legNumber, darts: wonLegs[0].darts }
         );
       }
     }

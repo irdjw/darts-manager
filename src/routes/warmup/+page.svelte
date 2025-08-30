@@ -287,9 +287,10 @@
           
           <!-- Format Selection -->
           <div class="mb-6">
-            <label class="block text-sm font-medium text-gray-700 mb-2">
-              Tournament Format
-            </label>
+            <fieldset>
+              <legend class="block text-sm font-medium text-gray-700 mb-2">
+                Tournament Format
+              </legend>
             <div class="flex flex-col sm:flex-row gap-2">
               <label class="flex items-center">
                 <input 
@@ -312,6 +313,7 @@
                 <span class="text-sm">Best of 3 (Standard)</span>
               </label>
             </div>
+            </fieldset>
           </div>
 
           <!-- Player Selection -->

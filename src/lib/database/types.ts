@@ -76,7 +76,7 @@ export interface WarmupSession {
 // API response types
 export interface ApiResponse<T> {
   data: T | null;
-  error: DatabaseError | null;
+  error: Error | null;
   loading: boolean;
 }
 

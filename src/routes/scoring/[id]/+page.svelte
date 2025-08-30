@@ -358,15 +358,15 @@
             <h2 class="text-lg font-semibold text-gray-900 mb-4">Match Details</h2>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label class="block text-sm font-medium text-gray-700">Week</label>
+                <div class="block text-sm font-medium text-gray-700">Week</div>
                 <div class="mt-1 text-lg font-semibold">{fixture.week_number}</div>
               </div>
               <div>
-                <label class="block text-sm font-medium text-gray-700">Opposition</label>
+                <div class="block text-sm font-medium text-gray-700">Opposition</div>
                 <div class="mt-1 text-lg font-semibold">{fixture.opposition}</div>
               </div>
               <div>
-                <label class="block text-sm font-medium text-gray-700">Venue</label>
+                <div class="block text-sm font-medium text-gray-700">Venue</div>
                 <div class="mt-1 text-lg font-semibold">{getVenueDisplay(fixture.venue)}</div>
               </div>
             </div>
@@ -379,10 +379,11 @@
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <!-- Home Player Selection -->
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">
+              <label for="home-player-select" class="block text-sm font-medium text-gray-700 mb-2">
                 Our Player
               </label>
               <select 
+                id="home-player-select"
                 bind:value={selectedHomePlayer}
                 class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 
                        focus:ring-blue-500 focus:border-blue-500"
@@ -417,10 +418,11 @@
 
             <!-- Away Player Selection -->
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">
+              <label for="away-player-select" class="block text-sm font-medium text-gray-700 mb-2">
                 Opposition Player
               </label>
               <select 
+                id="away-player-select"
                 bind:value={selectedAwayPlayer}
                 class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 
                        focus:ring-blue-500 focus:border-blue-500"

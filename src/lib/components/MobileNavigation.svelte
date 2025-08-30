@@ -50,6 +50,7 @@
     class="fixed inset-0 z-50 lg:hidden"
     role="dialog" 
     aria-modal="true"
+    tabindex="-1"
     on:click={handleOverlayClick}
     on:keydown={(e) => e.key === 'Escape' && dispatch('close')}
   >

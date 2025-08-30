@@ -128,6 +128,7 @@
           <button
             on:click={toggleDetails}
             class="text-gray-500 hover:text-gray-700 focus:outline-none focus:text-gray-700"
+            aria-label="Toggle error details"
           >
             <svg 
               class="w-5 h-5 transform transition-transform {showDetails ? 'rotate-180' : ''}" 

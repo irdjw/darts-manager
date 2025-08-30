@@ -372,19 +372,19 @@
         <h2 class="text-lg font-semibold text-gray-900 mb-4">Match Details</h2>
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700">Week</label>
+            <div class="block text-sm font-medium text-gray-700">Week</div>
             <div class="mt-1 text-lg font-semibold">{fixture.week_number}</div>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700">Opposition</label>
+            <div class="block text-sm font-medium text-gray-700">Opposition</div>
             <div class="mt-1 text-lg font-semibold">{fixture.opposition}</div>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700">Date</label>
+            <div class="block text-sm font-medium text-gray-700">Date</div>
             <div class="mt-1 text-lg font-semibold">{formatDate(fixture.match_date)}</div>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700">Venue</label>
+            <div class="block text-sm font-medium text-gray-700">Venue</div>
             <div class="mt-1 text-lg font-semibold">{getVenueDisplay(fixture.venue)}</div>
           </div>
         </div>
@@ -460,7 +460,8 @@
 
                 <select 
                   on:change={(e) => {
-                    const playerId = e.target.value;
+                    const target = e.target as HTMLSelectElement;
+                    const playerId = target.value;
                     if (playerId) {
                       const player = selectedPlayers.find(p => p.id === playerId);
                       if (player) {

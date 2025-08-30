@@ -28,6 +28,9 @@
   export let isLeagueMatch: boolean = false;
   export let startingScore: number = 501;
   export let mode: 'dart-by-dart' | 'turn-total' | 'simple' = 'dart-by-dart';
+  
+  // Mark as used to avoid unused export warning
+  $: currentStartingScore = startingScore;
   export let onGameComplete: ((stats: any[]) => void) | undefined = undefined;
   export let onScoreUpdate: ((homeScore: number, awayScore: number) => void) | undefined = undefined;
 

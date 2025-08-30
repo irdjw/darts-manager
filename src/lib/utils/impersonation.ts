@@ -106,15 +106,16 @@ export function validateImpersonation(
 export function onImpersonationChange(
   callback: (state: ImpersonationState | null) => void
 ): () => void {
-  const handleChange = (event: CustomEvent) => {
-    callback(event.detail);
+  const handleChange = (event: Event) => {
+    const customEvent = event as CustomEvent;
+    callback(customEvent.detail);
   };
   
-  window.addEventListener('impersonation-changed', handleChange);
+  window.addEventListener('impersonation-changed', handleChange as EventListener);
   
   // Return cleanup function
   return () => {
-    window.removeEventListener('impersonation-changed', handleChange);
+    window.removeEventListener('impersonation-changed', handleChange as EventListener);
   };
 }
 
