@@ -19,8 +19,6 @@
   let showInstallPrompt = false;
   let showUpdateNotification = false;
   
-  // Get user role from session data
-  $: userRole = data?.userRole || 'player';
   $: isAuthenticated = !!data?.session?.user;
   $: isAuthPage = $page.route.id === '/auth' || $page.route.id === '/';
   
@@ -111,7 +109,6 @@
   <!-- Mobile Navigation -->
   {#if isAuthenticated && !isAuthPage}
     <MobileNavigation 
-      {userRole} 
       isOpen={mobileMenuOpen} 
       on:close={closeMobileMenu}
     />

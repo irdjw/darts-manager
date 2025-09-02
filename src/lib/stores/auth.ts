@@ -4,7 +4,6 @@ import type { User } from '@supabase/supabase-js';
 
 interface AuthState {
   user: User | null;
-  userRole: string | null;
   loading: boolean;
   error: string | null;
 }
@@ -12,7 +11,6 @@ interface AuthState {
 function createAuthStore() {
   const { subscribe, set, update } = writable<AuthState>({
     user: null,
-    userRole: null,
     loading: false,
     error: null
   });
@@ -21,10 +19,9 @@ function createAuthStore() {
     subscribe,
     
     // Update auth state from page data (server-side source of truth)
-    updateFromPageData: (user: User | null, userRole: string | null) => {
+    updateFromPageData: (user: User | null) => {
       set({
         user,
-        userRole,
         loading: false,
         error: null
       });
@@ -97,7 +94,6 @@ export const auth = createAuthStore();
 
 // Derived stores
 export const user = derived(auth, $auth => $auth.user);
-export const userRole = derived(auth, $auth => $auth.userRole);
 export const isAuthenticated = derived(auth, $auth => !!$auth.user);
 export const isLoading = derived(auth, $auth => $auth.loading);
 export const authError = derived(auth, $auth => $auth.error);

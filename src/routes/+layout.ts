@@ -12,8 +12,7 @@ export const load: LayoutLoad = async ({ data, depends }) => {
   // Just pass through the data provided by +layout.server.ts.
   return {
     session: data.session,
-    user: data.user,
-    userRole: data.userRole
+    user: data.user
   };
 };
 

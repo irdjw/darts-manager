@@ -39,18 +39,15 @@ declare global {
     interface Locals {
       supabase: SupabaseClient;
       user?: User;
-      userRole?: UserRole['role'];
     }
 
     interface PageData {
       session: import('@supabase/supabase-js').Session | null;
       user: User | null;
-      userRole?: UserRole['role'];
       players?: Player[];
       fixtures?: Fixture[];
       attendance?: AttendanceRecord[];
       dashboardStats?: DashboardStats;
-      permissions?: Permission;
     }
 
     interface Platform {

@@ -4,32 +4,19 @@
 
   // Props
   export let isOpen = false;
-  export let userRole: string = 'player';
 
   const dispatch = createEventDispatcher();
 
-  // Navigation items based on user role
-  $: navigationItems = getNavigationItems(userRole);
-
-  function getNavigationItems(role: string) {
-    const baseItems = [
-      { href: '/dashboard', label: 'Dashboard', icon: '📊' },
-      { href: '/statistics', label: 'Statistics', icon: '📈' },
-      { href: '/attendance', label: 'Attendance', icon: '✅' },
-      { href: '/team-selection', label: 'Team Selection', icon: '👥' },
-      { href: '/warmup', label: 'Practice', icon: '🎯' }
-    ];
-
-    if (role === 'captain' || role === 'admin' || role === 'super_admin') {
-      baseItems.push({ href: '/team', label: 'Team Management', icon: '⚙️' });
-    }
-
-    if (role === 'admin' || role === 'super_admin') {
-      baseItems.push({ href: '/admin', label: 'Admin', icon: '🛠️' });
-    }
-
-    return baseItems;
-  }
+  // All navigation items - no role restrictions
+  const navigationItems = [
+    { href: '/dashboard', label: 'Dashboard', icon: '📊' },
+    { href: '/statistics', label: 'Statistics', icon: '📈' },
+    { href: '/attendance', label: 'Attendance', icon: '✅' },
+    { href: '/team-selection', label: 'Team Selection', icon: '👥' },
+    { href: '/warmup', label: 'Practice', icon: '🎯' },
+    { href: '/team', label: 'Team Management', icon: '⚙️' },
+    { href: '/admin', label: 'Admin', icon: '🛠️' }
+  ];
 
   function handleItemClick() {
     dispatch('close');
@@ -112,7 +99,7 @@
             <div class="flex-1">
               <p class="text-sm font-medium text-gray-900">User</p>
               <div class="flex items-center space-x-2">
-                <span class="text-xs text-gray-500 capitalize">{userRole.replace('_', ' ')}</span>
+                <span class="text-xs text-gray-500">User</span>
               </div>
             </div>
           </div>

@@ -21,7 +21,6 @@
   let touchEndX = 0;
   let fixtureCard: HTMLElement;
   
-  $: userRole = data?.userRole || 'player';
   
   onMount(async () => {
     await loadData();
@@ -122,13 +121,6 @@
         <div>
           <div class="flex items-center space-x-2">
             <h1 class="text-lg font-bold text-gray-900">Dashboard</h1>
-            <span class="px-2 py-1 text-xs font-medium rounded-full capitalize
-                        {userRole === 'super_admin' ? 'bg-purple-100 text-purple-800' :
-                         userRole === 'admin' ? 'bg-red-100 text-red-800' :
-                         userRole === 'captain' ? 'bg-blue-100 text-blue-800' :
-                         'bg-gray-100 text-gray-800'}">
-              {userRole.replace('_', ' ')}
-            </span>
           </div>
           <p class="text-sm text-gray-500 hidden lg:block">Isaac Wilson Darts Team</p>
         </div>
@@ -250,7 +242,7 @@
         <!-- Quick Actions -->
         <section>
           <h2 class="text-lg font-semibold text-gray-900 mb-3">Quick Actions</h2>
-          <QuickActions {userRole} />
+          <QuickActions />
         </section>
 
         <!-- Stats -->
