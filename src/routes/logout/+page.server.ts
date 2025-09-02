@@ -31,8 +31,6 @@ export const actions = {
       cookies.delete(cookieName, { path: '/', domain: undefined });
     });
     
-    // Clear impersonation if it exists
-    cookies.delete('impersonating-role', { path: '/' });
     
     // Redirect to auth page
     throw redirect(303, '/auth');

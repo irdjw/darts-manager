@@ -5,8 +5,6 @@
   // Props
   export let isOpen = false;
   export let userRole: string = 'player';
-  export let originalRole: string = 'player';
-  export let isImpersonating = false;
 
   const dispatch = createEventDispatcher();
 
@@ -115,44 +113,11 @@
               <p class="text-sm font-medium text-gray-900">User</p>
               <div class="flex items-center space-x-2">
                 <span class="text-xs text-gray-500 capitalize">{userRole.replace('_', ' ')}</span>
-                {#if isImpersonating}
-                  <span class="px-1.5 py-0.5 text-xs font-medium rounded bg-orange-100 text-orange-800">
-                    Testing
-                  </span>
-                {/if}
               </div>
             </div>
           </div>
           
           <div class="space-y-3">
-            <!-- Impersonation controls for super admin -->
-            {#if originalRole === 'super_admin' && !isImpersonating}
-              <button
-                on:click={() => dispatch('show-impersonation')}
-                class="w-full flex items-center justify-center px-3 py-2 border border-purple-300 
-                       rounded-lg text-sm font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 
-                       transition-colors"
-              >
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                        d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
-                </svg>
-                View As User
-              </button>
-            {:else if isImpersonating}
-              <button
-                on:click={() => dispatch('show-impersonation')}
-                class="w-full flex items-center justify-center px-3 py-2 border border-orange-300 
-                       rounded-lg text-sm font-medium text-orange-700 bg-orange-50 hover:bg-orange-100 
-                       transition-colors"
-              >
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Stop Testing
-              </button>
-            {/if}
             
             <form action="/logout" method="post" class="w-full">
               <button
