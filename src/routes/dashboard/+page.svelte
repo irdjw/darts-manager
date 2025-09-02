@@ -46,9 +46,13 @@
       // Find current fixture (next upcoming match)
       const now = new Date();
       currentFixtureIndex = allFixtures.findIndex(f => 
-        f.status === 'scheduled' && new Date(f.match_date) >= now
+        f.status === 'to_play' && new Date(f.match_date) >= now
       );
-      if (currentFixtureIndex === -1) currentFixtureIndex = 0;
+      if (currentFixtureIndex === -1) {
+        // If no upcoming matches, find the first 'to_play' fixture
+        currentFixtureIndex = allFixtures.findIndex(f => f.status === 'to_play');
+        if (currentFixtureIndex === -1) currentFixtureIndex = 0;
+      }
       
       currentFixture = allFixtures[currentFixtureIndex] || null;
       stats = statsData;
@@ -260,9 +264,9 @@
                   </div>
                   <div class="text-right">
                     <span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium block mb-2">
-                      {currentFixture.status === 'scheduled' ? 'Upcoming' : 
+                      {currentFixture.status === 'to_play' ? 'Upcoming' : 
                        currentFixture.status === 'completed' ? 'Completed' : 
-                       currentFixture.status === 'in_progress' ? 'In Progress' : 'To Play'}
+                       currentFixture.status === 'in_progress' ? 'In Progress' : 'Unknown'}
                     </span>
                     {#if allFixtures.length > 1}
                       <p class="text-xs text-gray-400">Swipe to navigate</p>

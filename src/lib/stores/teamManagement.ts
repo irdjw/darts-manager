@@ -27,12 +27,12 @@ export const teamStore = {
     // Captain can pick from ALL players who are in attendance (regardless of previous performance)
     const available = players.filter(p => {
       const attendanceRecord = attendance.find(a => a.player_id === p.id);
-      return attendanceRecord?.attended === true;
+      return attendanceRecord?.available === true;
     });
     
     const unavailable = players.filter(p => {
       const attendanceRecord = attendance.find(a => a.player_id === p.id);
-      return !attendanceRecord || attendanceRecord.attended === false;
+      return !attendanceRecord || attendanceRecord.available === false;
     });
     
     // No auto-selection - captain picks from all attendees

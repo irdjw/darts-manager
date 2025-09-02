@@ -36,7 +36,7 @@ export interface Attendance {
   id: string;
   player_id: string;
   week_number: number;
-  attended: boolean;
+  available: boolean;
   selected: boolean;
   created_at: string;
   // Relations (populated via joins)

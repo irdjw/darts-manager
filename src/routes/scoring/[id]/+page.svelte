@@ -98,7 +98,7 @@
         // Auto-select players if we have attendance data for this week
         try {
           const attendance = await dashboardService.getWeeklyAttendance(fixture.week_number);
-          const selectedAttendees = attendance.filter(a => a.selected && a.attended);
+          const selectedAttendees = attendance.filter(a => a.selected && a.available);
           
           if (selectedAttendees.length >= 2) {
             selectedHomePlayer = selectedAttendees[0].player_id;

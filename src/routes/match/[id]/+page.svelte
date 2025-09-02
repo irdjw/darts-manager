@@ -111,7 +111,7 @@
       if (selectedAttendance.length === 0) {
         // If no team selected, show all available players for captain to select
         const allPlayers = await dashboardService.getAllPlayers();
-        const availableAttendance = attendance.filter(a => a.attended);
+        const availableAttendance = attendance.filter(a => a.available);
         selectedPlayers = allPlayers.filter(p => 
           availableAttendance.some(a => a.player_id === p.id)
         );

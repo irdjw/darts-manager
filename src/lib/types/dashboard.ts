@@ -17,7 +17,7 @@ export interface AttendanceRecord {
   player_id: string;
   week_number: number;
   league_year: string;
-  attended: boolean;
+  available: boolean;
   selected: boolean;
   player?: Player;
 }
