@@ -375,17 +375,20 @@
           <QuickActions {userRole} />
         </section>
 
-        <!-- DEBUG: Current Role -->
-        <div class="bg-blue-50 border border-blue-200 p-2 rounded text-xs">
-          <strong>DEBUG:</strong> Current Role: {userRole} | Original: {originalRole} | Data: {JSON.stringify(data)}
+        <!-- DEBUG: Current Role (temporary) -->
+        <div class="bg-blue-50 border border-blue-200 p-2 rounded text-xs mb-4">
+          <strong>DEBUG:</strong> Current Role: {userRole} | Original: {originalRole}
+          {#if userRole === 'player'}
+            | <a href="/setup-admin?allow=setup-roles-2025" class="text-blue-600 underline">Need admin access?</a>
+          {/if}
         </div>
 
-        <!-- Admin Match Workaround (temporarily showing for all users for testing) -->
-        {#if userRole === 'admin' || userRole === 'super_admin' || userRole === 'player'}
+        <!-- Admin Match Workaround -->
+        {#if userRole === 'admin' || userRole === 'super_admin'}
           <section class="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
             <h2 class="text-lg font-semibold text-yellow-800 mb-3 flex items-center">
-              ⚡ Match Management Workaround
-              <span class="ml-2 text-xs bg-yellow-200 text-yellow-700 px-2 py-1 rounded">TESTING - ALL USERS</span>
+              ⚡ Admin Match Workaround
+              <span class="ml-2 text-xs bg-yellow-200 text-yellow-700 px-2 py-1 rounded">TEMPORARY</span>
             </h2>
             <p class="text-sm text-yellow-700 mb-4">Use this section to manually create and manage matches when the main match cards aren't working.</p>
             
