@@ -10,10 +10,10 @@ function validateUserRole(role: string | undefined): UserRole['role'] {
   if (role && validRoles.includes(role as UserRole['role'])) {
     return role as UserRole['role'];
   }
-  return 'player'; // Default fallback role
+  return 'player';
 }
 
-// Helper function to get user role from database
+// Get user role from database ONLY - no metadata fallback
 async function getUserRoleFromDatabase(supabase: any, userId: string): Promise<UserRole['role']> {
   try {
     const { data, error } = await supabase
@@ -23,7 +23,15 @@ async function getUserRoleFromDatabase(supabase: any, userId: string): Promise<U
       .single();
     
     if (error) {
-      console.log('No user_roles record found for user:', userId, error.message);
+      // Create default player role if none exists
+      const { error: insertError } = await supabase
+        .from('user_roles')
+        .insert([{ user_id: userId, role: 'player' }]);
+      
+      if (insertError) {
+        console.error('Error creating default user role:', insertError);
+      }
+      
       return 'player';
     }
     
@@ -60,31 +68,8 @@ export const handle: Handle = async ({ event, resolve }) => {
     // Attach user to event
     event.locals.user = session.user;
     
-    // Try multiple sources for user role in priority order:
-    // 1. Check user_metadata.role (set during signup/admin assignment)
-    let roleFromMetadata = validateUserRole(session.user.user_metadata?.role);
-    
-    // 2. Check database user_roles table as fallback
-    let roleFromDatabase = await getUserRoleFromDatabase(supabase, session.user.id);
-    
-    // 3. Use the higher privilege role if they differ
-    const rolePriority = { 'player': 1, 'captain': 2, 'admin': 3, 'super_admin': 4 };
-    if (rolePriority[roleFromDatabase] > rolePriority[roleFromMetadata]) {
-      userRole = roleFromDatabase;
-      console.log(`Using database role: ${roleFromDatabase} over metadata role: ${roleFromMetadata}`);
-    } else {
-      userRole = roleFromMetadata;
-    }
-    
-    // Debug logging
-    console.log('Role resolution:', {
-      userId: session.user.id,
-      email: session.user.email,
-      metadataRole: session.user.user_metadata?.role,
-      resolvedMetadataRole: roleFromMetadata,
-      databaseRole: roleFromDatabase,
-      finalRole: userRole
-    });
+    // Get role from database ONLY - ignore user_metadata completely
+    userRole = await getUserRoleFromDatabase(supabase, session.user.id);
     
     event.locals.userRole = userRole;
   }

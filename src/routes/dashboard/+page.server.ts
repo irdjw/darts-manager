@@ -1,8 +1,14 @@
 import type { PageServerLoad } from './$types';
-import { getEffectiveUserRole } from '$lib/utils/impersonation';
 
-export const load: PageServerLoad = async ({ locals, cookies }) => {
-  // Get session from Supabase client
+export const load: PageServerLoad = async ({ locals, setHeaders }) => {
+  // Prevent browser caching of role data
+  setHeaders({
+    'cache-control': 'no-cache, no-store, must-revalidate',
+    'pragma': 'no-cache',
+    'expires': '0'
+  });
+
+  // Get session and role from locals (set by hooks.server.ts)
   const {
     data: { session },
     error
@@ -13,24 +19,19 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
   }
   
   if (!session?.user) {
-    // For now, return a default user role instead of redirecting
-    // In production, you might want to redirect to auth
     return {
       userRole: 'player',
-      originalRole: 'player',
-      isImpersonating: false,
       session: null
     };
   }
   
-  const originalRole = session.user.user_metadata?.role || 'player';
-  const impersonatingRole = cookies.get('impersonating-role');
-  const effectiveRole = getEffectiveUserRole(originalRole, impersonatingRole);
+  // Role is already determined by hooks.server.ts from database
+  const userRole = locals.userRole || 'player';
   
   return {
-    userRole: effectiveRole,
-    originalRole,
-    isImpersonating: originalRole !== effectiveRole,
-    session
+    userRole,
+    session,
+    userId: session.user.id,
+    userEmail: session.user.email
   };
 };
