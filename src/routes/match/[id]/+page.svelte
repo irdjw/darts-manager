@@ -278,29 +278,36 @@
 
     try {
       saving = true;
-      const result = getOverallResult();
-      const matchResult = getMatchResult();
+      
+      // Prepare game results for database saving
+      const gameResults = gameAssignments
+        .filter(game => game.status === 'completed' && game.playerId)
+        .map(game => ({
+          gameNumber: game.gameNumber,
+          playerId: game.playerId!,
+          playerName: game.playerName!,
+          result: game.result!,
+          // Note: Individual game stats would come from the scoring engine
+          // For now, we'll save the basic result structure
+        }));
 
-      // In a real app, save the fixture result to database
-      console.log('Completing fixture:', {
-        fixtureId,
-        homeScore: result.wins,
-        awayScore: result.losses,
-        result: matchResult,
-        gameResults: gameAssignments
-      });
+      if (gameResults.length !== 7) {
+        error = 'All 7 games must be completed with results';
+        return;
+      }
 
-      // Mock save
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Save fixture completion to database
+      await dashboardService.completeFixture(fixtureId, gameResults);
 
-      // Clear localStorage
+      // Clear localStorage after successful database save
       localStorage.removeItem(`match_${fixtureId}`);
 
       // Navigate back to dashboard
       goto('/dashboard');
       
-    } catch (err) {
-      error = err instanceof Error ? err.message : 'Failed to complete fixture';
+    } catch (err: any) {
+      console.error('Error completing fixture:', err);
+      error = err.message || 'Failed to complete fixture';
     } finally {
       saving = false;
     }

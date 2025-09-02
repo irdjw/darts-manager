@@ -9,19 +9,8 @@ export interface Fixture {
   team_won?: boolean;
 }
 
-export interface Player {
-  id: string;
-  name: string;
-  games_played: number;
-  games_won: number;
-  games_lost: number;
-  win_percentage: number;
-  consecutive_losses: number;
-  drop_week?: number;
-  last_result?: 'win' | 'loss';
-  highest_checkout: number;
-  total_180s: number;
-}
+// Re-export Player from database types for consistency
+export type { Player } from '$lib/database/types';
 
 export interface AttendanceRecord {
   id: string;

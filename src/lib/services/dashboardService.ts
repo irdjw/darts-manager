@@ -1,5 +1,7 @@
 import { supabase, handleDatabaseError, retryDatabaseOperation } from '$lib/database/supabase';
-import type { Fixture, Player, AttendanceRecord, DashboardStats } from '$lib/types/dashboard';
+import type { Player } from '$lib/database/types';
+import type { Fixture, AttendanceRecord, DashboardStats } from '$lib/types/dashboard';
+import type { PlayerGameStats } from '$lib/types/scoring';
 
 export class DashboardService {
   /**
@@ -388,5 +390,212 @@ async getCurrentWeek(): Promise<number> {
       consecutive_losses: 0,
       drop_week: undefined
     };
+  }
+
+  /**
+   * Save individual league game result
+   */
+  async saveLeagueGame(gameData: {
+    fixture_id: string;
+    game_number: number;
+    our_player_id: string;
+    opponent_name: string;
+    result: 'win' | 'loss';
+  }): Promise<void> {
+    try {
+      await retryDatabaseOperation(async () => {
+        const { error } = await supabase
+          .from('league_games')
+          .upsert({
+            fixture_id: gameData.fixture_id,
+            game_number: gameData.game_number,
+            our_player_id: gameData.our_player_id,
+            opponent_name: gameData.opponent_name,
+            result: gameData.result,
+          }, {
+            onConflict: 'fixture_id,game_number'
+          });
+
+        if (error) {
+          console.error('Error saving league game:', error);
+          throw error;
+        }
+      });
+    } catch (err: any) {
+      console.error('saveLeagueGame error:', err);
+      throw new Error(handleDatabaseError(err));
+    }
+  }
+
+  /**
+   * Save game statistics for a player
+   */
+  async saveGameStatistics(stats: PlayerGameStats, fixtureId: string): Promise<void> {
+    try {
+      await retryDatabaseOperation(async () => {
+        const { error } = await supabase
+          .from('game_statistics')
+          .insert({
+            player_id: stats.playerId,
+            player_name: stats.playerName,
+            game_type: 'league',
+            fixture_id: fixtureId,
+            game_date: new Date().toISOString().split('T')[0],
+            league_year: '2025/26',
+            opponent_type: 'team',
+            opponent_name: 'Opposition Player',
+            game_won: stats.gameWon,
+            legs_played: stats.legsPlayed,
+            legs_won: stats.legsWon,
+            total_darts: stats.totalDarts,
+            total_points: stats.totalPoints,
+            scores_180: stats.scores180,
+            scores_140_plus: stats.scores140Plus,
+            scores_100_plus: stats.scores100Plus,
+            scores_80_plus: stats.scores80Plus,
+            double_attempts: stats.doubleAttempts,
+            double_hits: stats.doubleHits,
+            checkout_attempts: stats.checkoutAttempts,
+            checkout_hits: stats.checkoutHits,
+            highest_checkout: stats.highestCheckout
+          });
+
+        if (error) {
+          console.error('Error saving game statistics:', error);
+          throw error;
+        }
+      });
+    } catch (err: any) {
+      console.error('saveGameStatistics error:', err);
+      throw new Error(handleDatabaseError(err));
+    }
+  }
+
+  /**
+   * Update player statistics after a game
+   */
+  async updatePlayerStats(playerId: string, gameResult: 'win' | 'loss', gameStats: Partial<PlayerGameStats>): Promise<void> {
+    try {
+      await retryDatabaseOperation(async () => {
+        // Get current player stats
+        const { data: player, error: fetchError } = await supabase
+          .from('players')
+          .select('*')
+          .eq('id', playerId)
+          .single();
+
+        if (fetchError) throw fetchError;
+
+        // Calculate updated stats
+        const updatedStats = {
+          games_played: (player.games_played || 0) + 1,
+          games_won: (player.games_won || 0) + (gameResult === 'win' ? 1 : 0),
+          games_lost: (player.games_lost || 0) + (gameResult === 'loss' ? 1 : 0),
+          total_darts: (player.total_darts || 0) + (gameStats.totalDarts || 0),
+          total_180s: (player.total_180s || 0) + (gameStats.scores180 || 0),
+          highest_checkout: Math.max(player.highest_checkout || 0, gameStats.highestCheckout || 0),
+          checkout_attempts: (player.checkout_attempts || 0) + (gameStats.checkoutAttempts || 0),
+          checkout_hits: (player.checkout_hits || 0) + (gameStats.checkoutHits || 0),
+          last_result: gameResult,
+          consecutive_losses: gameResult === 'win' ? 0 : (player.consecutive_losses || 0) + 1
+        };
+
+        // Calculate win percentage
+        updatedStats.win_percentage = updatedStats.games_played > 0 
+          ? Math.round((updatedStats.games_won / updatedStats.games_played) * 100 * 100) / 100
+          : 0;
+
+        // Update player in database
+        const { error: updateError } = await supabase
+          .from('players')
+          .update(updatedStats)
+          .eq('id', playerId);
+
+        if (updateError) {
+          console.error('Error updating player stats:', updateError);
+          throw updateError;
+        }
+      });
+    } catch (err: any) {
+      console.error('updatePlayerStats error:', err);
+      throw new Error(handleDatabaseError(err));
+    }
+  }
+
+  /**
+   * Complete a fixture with all game results (atomic transaction)
+   */
+  async completeFixture(fixtureId: string, gameResults: Array<{
+    gameNumber: number;
+    playerId: string;
+    playerName: string;
+    result: 'win' | 'loss';
+    stats?: PlayerGameStats;
+  }>): Promise<void> {
+    try {
+      await retryDatabaseOperation(async () => {
+        // Start a transaction by batching operations
+        const operations = [];
+
+        // Calculate match result
+        const wins = gameResults.filter(g => g.result === 'win').length;
+        const losses = gameResults.filter(g => g.result === 'loss').length;
+        const teamWon = wins > losses;
+
+        // Update fixture status
+        operations.push(
+          supabase
+            .from('fixtures')
+            .update({
+              result: teamWon ? 'win' : 'loss',
+              status: 'completed',
+              team_won: teamWon
+            })
+            .eq('id', fixtureId)
+        );
+
+        // Save each game result
+        for (const game of gameResults) {
+          operations.push(
+            supabase
+              .from('league_games')
+              .upsert({
+                fixture_id: fixtureId,
+                game_number: game.gameNumber,
+                our_player_id: game.playerId,
+                opponent_name: 'Opposition Player',
+                result: game.result
+              }, {
+                onConflict: 'fixture_id,game_number'
+              })
+          );
+
+          // Save game statistics if provided
+          if (game.stats) {
+            operations.push(
+              this.saveGameStatistics(game.stats, fixtureId)
+            );
+
+            // Update player statistics
+            operations.push(
+              this.updatePlayerStats(game.playerId, game.result, game.stats)
+            );
+          }
+        }
+
+        // Execute all operations
+        const results = await Promise.allSettled(operations);
+        
+        // Check if any operations failed
+        const failures = results.filter(result => result.status === 'rejected');
+        if (failures.length > 0) {
+          console.error('Some operations failed during fixture completion:', failures);
+          throw new Error('Failed to complete fixture - some operations failed');
+        }
+      });
+    } catch (err: any) {
+      console.error('completeFixture error:', err);
+      throw new Error(handleDatabaseError(err));
+    }
   }
 }

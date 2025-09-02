@@ -18,13 +18,16 @@
     legStartStatus
   } from '../stores/scoringStores';
   import { checkoutService } from '../services/checkoutService';
-  import type { ScoringEngineProps, DartThrow } from '../types/scoring';
+  import { statisticsService } from '../services/statisticsService';
+  import type { ScoringEngineProps, DartThrow, PlayerGameStats, LegData } from '../types/scoring';
   import { GAME_MODES } from '../types/scoring';
 
   // Props
   export let gameId: string;
   export let homePlayerName: string;
   export let awayPlayerName: string;
+  export let homePlayerId: string = 'home-player-id';
+  export let awayPlayerId: string = 'away-player-id';
   export let isLeagueMatch: boolean = false;
   export let startingScore: number = 501;
   export let mode: 'dart-by-dart' | 'turn-total' | 'simple' = 'dart-by-dart';
@@ -48,6 +51,11 @@
   let currentTurnTotalValue: number;
   let statsValue: any;
   let legStartStatusValue: any;
+
+  // Game tracking variables
+  let allDarts: DartThrow[] = [];
+  let allLegs: LegData[] = [];
+  let gameStartTime = new Date();
 
   // Store subscriptions
   const unsubscribers: (() => void)[] = [];
@@ -290,8 +298,24 @@
     }));
 
     if (onGameComplete) {
-      // This would calculate final statistics
-      onGameComplete([]);
+      // Calculate final statistics for both players
+      const homePlayerStats = statisticsService.calculateGameStats(
+        homePlayerId,
+        homePlayerName,
+        allDarts.filter(d => d.playerId === homePlayerId),
+        allLegs.filter(l => l.playerId === homePlayerId),
+        currentGameState.winner === 'home'
+      );
+
+      const awayPlayerStats = statisticsService.calculateGameStats(
+        awayPlayerId,
+        awayPlayerName,
+        allDarts.filter(d => d.playerId === awayPlayerId),
+        allLegs.filter(l => l.playerId === awayPlayerId),
+        currentGameState.winner === 'away'
+      );
+
+      onGameComplete([homePlayerStats, awayPlayerStats]);
     }
   }
 

@@ -166,27 +166,74 @@
     error = null;
   }
 
-  function finishAndSave() {
-    // In a real app, save results to database
-    const gameResult = {
-      gameNumber,
-      homePlayer: homePlayer?.name,
-      awayPlayer: awayPlayer?.name,
-      winner: matchStats.find(s => s.gameWon)?.playerName,
-      stats: matchStats
-    };
-    
-    // Save to localStorage temporarily for match management screen
-    if (fromMatchManagement && gameNumber) {
-      const existingResults = JSON.parse(localStorage.getItem(`match_${fixtureId}`) || '{}');
-      existingResults[`game_${gameNumber}`] = gameResult;
-      localStorage.setItem(`match_${fixtureId}`, JSON.stringify(existingResults));
-      
-      // Navigate back to match management
-      goto(`/match/${fixtureId}`);
-    } else {
-      // Navigate back to dashboard
-      goto('/dashboard');
+  async function finishAndSave() {
+    try {
+      loading = true;
+      error = null;
+
+      // Find the winning player's stats
+      const winnerStats = matchStats.find(s => s.gameWon);
+      const loserStats = matchStats.find(s => !s.gameWon);
+
+      if (!winnerStats || !homePlayer) {
+        throw new Error('Missing game results or player information');
+      }
+
+      // Save to database instead of localStorage
+      if (fromMatchManagement && gameNumber && homePlayer) {
+        // Save individual game result
+        await dashboardService.saveLeagueGame({
+          fixture_id: fixtureId,
+          game_number: gameNumber,
+          our_player_id: homePlayer.id,
+          opponent_name: awayPlayer?.name || 'Opposition Player',
+          result: winnerStats.playerId === homePlayer.id ? 'win' : 'loss'
+        });
+
+        // Save game statistics for our player
+        await dashboardService.saveGameStatistics(winnerStats.playerId === homePlayer.id ? winnerStats : loserStats!, fixtureId);
+
+        // Update player statistics
+        await dashboardService.updatePlayerStats(
+          homePlayer.id, 
+          winnerStats.playerId === homePlayer.id ? 'win' : 'loss',
+          winnerStats.playerId === homePlayer.id ? winnerStats : loserStats!
+        );
+
+        // Store a temporary marker in localStorage for match management UI
+        const existingResults = JSON.parse(localStorage.getItem(`match_${fixtureId}`) || '{}');
+        existingResults[`game_${gameNumber}`] = {
+          gameNumber,
+          homePlayer: homePlayer.name,
+          awayPlayer: awayPlayer?.name,
+          winner: winnerStats.playerName,
+          result: winnerStats.playerId === homePlayer.id ? 'win' : 'loss'
+        };
+        localStorage.setItem(`match_${fixtureId}`, JSON.stringify(existingResults));
+        
+        // Navigate back to match management
+        goto(`/match/${fixtureId}`);
+      } else {
+        // For standalone games, just save statistics
+        if (winnerStats) {
+          await dashboardService.saveGameStatistics(winnerStats, fixtureId);
+          if (homePlayer) {
+            await dashboardService.updatePlayerStats(
+              homePlayer.id,
+              winnerStats.playerId === homePlayer.id ? 'win' : 'loss',
+              winnerStats
+            );
+          }
+        }
+        
+        // Navigate back to dashboard
+        goto('/dashboard');
+      }
+    } catch (err: any) {
+      console.error('Error saving game results:', err);
+      error = err.message || 'Failed to save game results';
+    } finally {
+      loading = false;
     }
   }
 </script>
@@ -345,6 +392,8 @@
           gameId={fixtureId}
           homePlayerName={homePlayer.name}
           awayPlayerName={awayPlayer.name}
+          homePlayerId={homePlayer.id}
+          awayPlayerId={awayPlayer?.id || 'opponent-player-id'}
           isLeagueMatch={true}
           onGameComplete={handleGameComplete}
           onScoreUpdate={handleScoreUpdate}

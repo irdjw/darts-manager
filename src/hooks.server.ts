@@ -2,6 +2,16 @@ import { redirect } from '@sveltejs/kit';
 import type { Handle } from '@sveltejs/kit';
 import { createServerClient } from '@supabase/ssr';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
+import type { UserRole } from '$lib/database/types';
+
+// Helper function to validate and cast user roles
+function validateUserRole(role: string | undefined): UserRole['role'] {
+  const validRoles: UserRole['role'][] = ['super_admin', 'admin', 'captain', 'player'];
+  if (role && validRoles.includes(role as UserRole['role'])) {
+    return role as UserRole['role'];
+  }
+  return 'player'; // Default fallback role
+}
 
 export const handle: Handle = async ({ event, resolve }) => {
   // Create Supabase client for server-side auth
@@ -23,14 +33,14 @@ export const handle: Handle = async ({ event, resolve }) => {
     error,
   } = await supabase.auth.getSession();
 
-  let userRole = 'player';
+  let userRole: UserRole['role'] = 'player';
   
   if (session?.user && !error) {
     // Attach user to event
     event.locals.user = session.user;
     
     // Get user role from user_metadata (consistent with auth system)
-    userRole = session.user.user_metadata?.role || 'player';
+    userRole = validateUserRole(session.user.user_metadata?.role);
     event.locals.userRole = userRole;
   }
 

@@ -52,7 +52,7 @@
       // Load existing attendance for current week
       const { data: attendanceData, error: attendanceError } = await supabase
         .from('attendance')
-        .select('player_id, available')
+        .select('player_id, attended')
         .eq('week_number', currentWeek)
         .eq('league_year', '2025/26');
 
@@ -64,7 +64,7 @@
       attendance = new Map();
       players.forEach(player => {
         const existingRecord = attendanceData?.find(a => a.player_id === player.id);
-        attendance.set(player.id, existingRecord?.available ?? true);
+        attendance.set(player.id, existingRecord?.attended ?? true);
       });
 
       attendance = attendance; // Trigger reactivity
@@ -94,7 +94,7 @@
         player_id: player.id,
         week_number: currentWeek,
         league_year: '2025/26',
-        available: attendance.get(player.id) ?? true,
+        attended: attendance.get(player.id) ?? true,
         created_at: new Date().toISOString()
       }));
 
