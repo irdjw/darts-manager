@@ -37,6 +37,9 @@
   $: userRole = data?.userRole || 'player';
   $: originalRole = data?.originalRole || 'player';
   $: isImpersonating = data?.isImpersonating || false;
+
+  // Debug logging
+  $: if (userRole) console.log('Dashboard userRole:', userRole, 'originalRole:', originalRole);
   
   onMount(async () => {
     await loadData();
@@ -372,12 +375,17 @@
           <QuickActions {userRole} />
         </section>
 
-        <!-- Admin Match Workaround -->
-        {#if userRole === 'admin' || userRole === 'super_admin'}
+        <!-- DEBUG: Current Role -->
+        <div class="bg-blue-50 border border-blue-200 p-2 rounded text-xs">
+          <strong>DEBUG:</strong> Current Role: {userRole} | Original: {originalRole} | Data: {JSON.stringify(data)}
+        </div>
+
+        <!-- Admin Match Workaround (temporarily showing for all users for testing) -->
+        {#if userRole === 'admin' || userRole === 'super_admin' || userRole === 'player'}
           <section class="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
             <h2 class="text-lg font-semibold text-yellow-800 mb-3 flex items-center">
-              ⚡ Admin Match Workaround
-              <span class="ml-2 text-xs bg-yellow-200 text-yellow-700 px-2 py-1 rounded">TEMPORARY</span>
+              ⚡ Match Management Workaround
+              <span class="ml-2 text-xs bg-yellow-200 text-yellow-700 px-2 py-1 rounded">TESTING - ALL USERS</span>
             </h2>
             <p class="text-sm text-yellow-700 mb-4">Use this section to manually create and manage matches when the main match cards aren't working.</p>
             
