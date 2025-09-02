@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
   import { DashboardService } from '$lib/services/dashboardService';
+  import { supabase } from '$lib/database/supabase';
   import QuickActions from '$lib/components/QuickActions.svelte';
   import ImpersonationPanel from '$lib/components/ImpersonationPanel.svelte';
   import type { PageData } from './$types';
@@ -22,6 +24,15 @@
   let touchStartX = 0;
   let touchEndX = 0;
   let fixtureCard: HTMLElement;
+
+  // Admin workaround variables
+  let showMatchWorkaround = false;
+  let workaroundWeek = Math.floor((Date.now() - new Date('2025-08-01').getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
+  let workaroundOpposition = '';
+  let workaroundDate = new Date().toISOString().split('T')[0];
+  let workaroundVenue: 'home' | 'away' = 'home';
+  let workaroundCreating = false;
+  let workaroundError = '';
   
   $: userRole = data?.userRole || 'player';
   $: originalRole = data?.originalRole || 'player';
@@ -64,6 +75,79 @@
       error = err.message || 'Failed to load dashboard data';
     } finally {
       loading = false;
+    }
+  }
+
+  // Admin workaround functions
+  function resetWorkaroundForm() {
+    workaroundWeek = Math.floor((Date.now() - new Date('2025-08-01').getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
+    workaroundOpposition = '';
+    workaroundDate = new Date().toISOString().split('T')[0];
+    workaroundVenue = 'home';
+    workaroundError = '';
+  }
+
+  async function createWorkaroundMatch() {
+    if (!workaroundWeek || !workaroundOpposition) {
+      workaroundError = 'Please fill in both week number and opposition team';
+      return;
+    }
+
+    try {
+      workaroundCreating = true;
+      workaroundError = '';
+
+      // Create or find existing fixture
+      const fixtureData = {
+        league_year: '2025/26',
+        week_number: workaroundWeek,
+        match_date: workaroundDate,
+        opposition: workaroundOpposition.trim(),
+        venue: workaroundVenue,
+        result: 'to_play',
+        status: 'to_play',
+        team_won: null
+      };
+
+      // Try to create the fixture in database
+      const { data: newFixture, error: createError } = await supabase
+        .from('fixtures')
+        .insert([fixtureData])
+        .select()
+        .single();
+
+      if (createError) {
+        // If it already exists, try to find it
+        const { data: existingFixture, error: findError } = await supabase
+          .from('fixtures')
+          .select('*')
+          .eq('league_year', '2025/26')
+          .eq('week_number', workaroundWeek)
+          .single();
+
+        if (findError) {
+          throw new Error('Failed to create or find fixture: ' + (createError.message || 'Unknown error'));
+        }
+
+        if (existingFixture) {
+          // Use existing fixture
+          console.log('Using existing fixture:', existingFixture);
+          goto(`/match/${existingFixture.id}`);
+          return;
+        }
+      }
+
+      if (newFixture) {
+        // Navigate to match management for new fixture
+        console.log('Created new fixture:', newFixture);
+        goto(`/match/${newFixture.id}`);
+      }
+
+    } catch (err: any) {
+      console.error('Workaround match creation error:', err);
+      workaroundError = err.message || 'Failed to create match';
+    } finally {
+      workaroundCreating = false;
     }
   }
   
@@ -287,6 +371,139 @@
           <h2 class="text-lg font-semibold text-gray-900 mb-3">Quick Actions</h2>
           <QuickActions {userRole} />
         </section>
+
+        <!-- Admin Match Workaround -->
+        {#if userRole === 'admin' || userRole === 'super_admin'}
+          <section class="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
+            <h2 class="text-lg font-semibold text-yellow-800 mb-3 flex items-center">
+              ⚡ Admin Match Workaround
+              <span class="ml-2 text-xs bg-yellow-200 text-yellow-700 px-2 py-1 rounded">TEMPORARY</span>
+            </h2>
+            <p class="text-sm text-yellow-700 mb-4">Use this section to manually create and manage matches when the main match cards aren't working.</p>
+            
+            {#if !showMatchWorkaround}
+              <div class="space-y-3">
+                <div class="flex flex-wrap gap-2">
+                  <button 
+                    on:click={() => showMatchWorkaround = true}
+                    class="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
+                  >
+                    + Create New Match
+                  </button>
+                  
+                  {#if allFixtures.length > 0}
+                    <span class="text-sm text-gray-600 self-center">or select existing:</span>
+                  {/if}
+                </div>
+
+                <!-- Quick access to existing fixtures -->
+                {#if allFixtures.length > 0}
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-32 overflow-y-auto">
+                    {#each allFixtures.slice(0, 6) as fixture}
+                      <a 
+                        href="/match/{fixture.id}"
+                        class="flex justify-between items-center p-2 bg-white border border-gray-200 rounded-lg 
+                               hover:border-yellow-400 hover:shadow-sm transition-all text-sm"
+                      >
+                        <div>
+                          <span class="font-medium">Week {fixture.week_number}</span>
+                          <span class="text-gray-600">vs {fixture.opposition}</span>
+                        </div>
+                        <span class="text-xs px-2 py-1 rounded {
+                          fixture.status === 'completed' ? 'bg-green-100 text-green-700' :
+                          fixture.status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
+                          'bg-gray-100 text-gray-700'
+                        }">
+                          {fixture.status === 'to_play' ? 'Ready' : fixture.status}
+                        </span>
+                      </a>
+                    {/each}
+                  </div>
+                {/if}
+              </div>
+            {:else}
+              <div class="space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <!-- Week Number -->
+                  <div>
+                    <label for="workaround-week" class="block text-sm font-medium text-gray-700 mb-1">Week Number</label>
+                    <input 
+                      id="workaround-week"
+                      type="number" 
+                      bind:value={workaroundWeek}
+                      min="1" 
+                      max="30"
+                      class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                      placeholder="e.g. 12"
+                    />
+                  </div>
+
+                  <!-- Opposition -->
+                  <div>
+                    <label for="workaround-opposition" class="block text-sm font-medium text-gray-700 mb-1">Opposition Team</label>
+                    <input 
+                      id="workaround-opposition"
+                      type="text" 
+                      bind:value={workaroundOpposition}
+                      class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                      placeholder="e.g. The Crown"
+                    />
+                  </div>
+
+                  <!-- Match Date -->
+                  <div>
+                    <label for="workaround-date" class="block text-sm font-medium text-gray-700 mb-1">Match Date</label>
+                    <input 
+                      id="workaround-date"
+                      type="date" 
+                      bind:value={workaroundDate}
+                      class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                    />
+                  </div>
+
+                  <!-- Venue -->
+                  <div>
+                    <label for="workaround-venue" class="block text-sm font-medium text-gray-700 mb-1">Venue</label>
+                    <select 
+                      id="workaround-venue"
+                      bind:value={workaroundVenue}
+                      class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                    >
+                      <option value="home">Home</option>
+                      <option value="away">Away</option>
+                    </select>
+                  </div>
+                </div>
+
+                <!-- Error Display -->
+                {#if workaroundError}
+                  <div class="bg-red-50 border border-red-200 rounded-md p-3">
+                    <p class="text-sm text-red-800">{workaroundError}</p>
+                  </div>
+                {/if}
+
+                <!-- Action Buttons -->
+                <div class="flex space-x-3">
+                  <button 
+                    on:click={createWorkaroundMatch}
+                    disabled={workaroundCreating || !workaroundWeek || !workaroundOpposition}
+                    class="bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed 
+                           text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    {workaroundCreating ? 'Creating...' : 'Create & Manage Match'}
+                  </button>
+                  
+                  <button 
+                    on:click={() => { showMatchWorkaround = false; resetWorkaroundForm(); }}
+                    class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-medium"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            {/if}
+          </section>
+        {/if}
         
         <!-- Stats -->
         <section>
