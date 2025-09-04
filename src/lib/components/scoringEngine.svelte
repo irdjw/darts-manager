@@ -31,6 +31,7 @@
   export let isLeagueMatch: boolean = false;
   export let startingScore: number = 501;
   export let mode: 'dart-by-dart' | 'turn-total' | 'simple' = 'dart-by-dart';
+  export let venue: 'home' | 'away' | undefined = undefined;
   
   // Mark as used to avoid unused export warning
   $: currentStartingScore = startingScore;
@@ -66,7 +67,8 @@
       gameId, 
       homePlayerName, 
       awayPlayerName, 
-      isLeagueMatch ? 'league' : 'practice'
+      isLeagueMatch ? 'league' : 'practice',
+      venue
     );
     
     // Set initial scoring mode
@@ -423,6 +425,11 @@
           {currentGameState?.currentThrower === 'home' ? homePlayerName : awayPlayerName} to throw
         </p>
         <p class="text-xs text-gray-500">{dartsRemainingValue} dart{dartsRemainingValue !== 1 ? 's' : ''} remaining</p>
+        {#if venue}
+          <p class="text-xs text-blue-500 mt-1">
+            {venue === 'home' ? `${homePlayerName} throws second (home venue)` : `${homePlayerName} throws first (away venue)`}
+          </p>
+        {/if}
         
         <!-- Start status indicators -->
         <div class="flex justify-center gap-4 mt-2">

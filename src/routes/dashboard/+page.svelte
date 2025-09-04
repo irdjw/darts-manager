@@ -200,9 +200,18 @@
               >
                 <div class="flex justify-between items-start">
                   <div>
-                    <h3 class="text-lg font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
-                      Week {currentFixture.week_number}
-                    </h3>
+                    <div class="flex items-center space-x-3">
+                      <h3 class="text-lg font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+                        Week {currentFixture.week_number}
+                      </h3>
+                      {#if currentFixture.result === 'win'}
+                        <span class="text-2xl">🏆</span>
+                      {:else if currentFixture.result === 'loss'}
+                        <span class="text-2xl">⏰</span>
+                      {:else if currentFixture.status === 'to_play'}
+                        <span class="text-2xl">🎯</span>
+                      {/if}
+                    </div>
                     <p class="text-gray-700 font-medium">vs {currentFixture.opposition || 'TBD'}</p>
                     <p class="text-sm text-gray-500 mt-1">
                       {currentFixture.match_date ? new Date(currentFixture.match_date).toLocaleDateString('en-GB') : 'Date TBD'} • 
@@ -214,7 +223,9 @@
                   </div>
                   <div class="text-right">
                     <span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium block mb-2">
-                      {currentFixture.status === 'to_play' ? 'Upcoming' : 
+                      {currentFixture.result === 'win' ? 'Won' : 
+                       currentFixture.result === 'loss' ? 'Lost' : 
+                       currentFixture.status === 'to_play' ? 'Upcoming' : 
                        currentFixture.status === 'completed' ? 'Completed' : 
                        currentFixture.status === 'in_progress' ? 'In Progress' : 'Unknown'}
                     </span>

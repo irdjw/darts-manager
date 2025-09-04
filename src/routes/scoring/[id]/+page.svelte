@@ -395,6 +395,7 @@
           homePlayerId={homePlayer.id}
           awayPlayerId={awayPlayer?.id || 'opponent-player-id'}
           isLeagueMatch={true}
+          venue={fixture?.venue}
           onGameComplete={handleGameComplete}
           onScoreUpdate={handleScoreUpdate}
         />

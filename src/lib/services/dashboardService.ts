@@ -386,18 +386,39 @@ async getCurrentWeek(): Promise<number> {
     fixture_id: string;
     game_number: number;
     our_player_id: string;
-    opponent_name: string;
+    opponent_name?: string; // Made optional since we can derive it from fixture
     result: 'win' | 'loss';
   }): Promise<void> {
     try {
       await retryDatabaseOperation(async () => {
+        let opponentName = gameData.opponent_name;
+
+        // If opponent name is not provided, derive it from fixture
+        if (!opponentName) {
+          const { data: fixture, error: fixtureError } = await supabase
+            .from('fixtures')
+            .select('opposition')
+            .eq('id', gameData.fixture_id)
+            .single();
+
+          if (fixtureError) {
+            console.error('Error fetching fixture for opponent name:', fixtureError);
+            throw fixtureError;
+          }
+
+          // Format opponent name as "[Team Name] Player [Game Number]"
+          opponentName = fixture?.opposition 
+            ? `${fixture.opposition} Player ${gameData.game_number}`
+            : `Opposition Player ${gameData.game_number}`;
+        }
+
         const { error } = await supabase
           .from('league_games')
           .upsert({
             fixture_id: gameData.fixture_id,
             game_number: gameData.game_number,
             our_player_id: gameData.our_player_id,
-            opponent_name: gameData.opponent_name,
+            opponent_name: opponentName,
             result: gameData.result,
           }, {
             onConflict: 'fixture_id,game_number'
@@ -417,9 +438,28 @@ async getCurrentWeek(): Promise<number> {
   /**
    * Save game statistics for a player
    */
-  async saveGameStatistics(stats: PlayerGameStats, fixtureId: string): Promise<void> {
+  async saveGameStatistics(stats: PlayerGameStats, fixtureId: string, gameNumber?: number): Promise<void> {
     try {
       await retryDatabaseOperation(async () => {
+        // Get the fixture to obtain the opposition team name
+        const { data: fixture, error: fixtureError } = await supabase
+          .from('fixtures')
+          .select('opposition')
+          .eq('id', fixtureId)
+          .single();
+
+        if (fixtureError) {
+          console.error('Error fetching fixture for opponent name:', fixtureError);
+          throw fixtureError;
+        }
+
+        // Format opponent name - use gameNumber if provided, otherwise default
+        const opponentName = fixture?.opposition && gameNumber
+          ? `${fixture.opposition} Player ${gameNumber}`
+          : fixture?.opposition 
+          ? `${fixture.opposition} Player`
+          : 'Opposition Player';
+
         const { error } = await supabase
           .from('game_statistics')
           .insert({
@@ -430,7 +470,7 @@ async getCurrentWeek(): Promise<number> {
             game_date: new Date().toISOString().split('T')[0],
             league_year: '2025/26',
             opponent_type: 'team',
-            opponent_name: 'Opposition Player',
+            opponent_name: opponentName,
             game_won: stats.gameWon,
             legs_played: stats.legsPlayed,
             legs_won: stats.legsWon,
@@ -565,6 +605,23 @@ async getCurrentWeek(): Promise<number> {
   async saveGameAssignment(fixtureId: string, gameNumber: number, playerId: string): Promise<void> {
     try {
       await retryDatabaseOperation(async () => {
+        // Get the fixture to obtain the opposition team name
+        const { data: fixture, error: fixtureError } = await supabase
+          .from('fixtures')
+          .select('opposition')
+          .eq('id', fixtureId)
+          .single();
+
+        if (fixtureError) {
+          console.error('Error fetching fixture for opponent name:', fixtureError);
+          throw fixtureError;
+        }
+
+        // Format opponent name as "[Team Name] Player [Game Number]"
+        const opponentName = fixture?.opposition 
+          ? `${fixture.opposition} Player ${gameNumber}`
+          : `Opposition Player ${gameNumber}`;
+
         // First check if the assignment already exists
         const { data: existingGame } = await supabase
           .from('league_games')
@@ -579,7 +636,7 @@ async getCurrentWeek(): Promise<number> {
             .from('league_games')
             .update({
               our_player_id: playerId,
-              opponent_name: 'Opposition Player'
+              opponent_name: opponentName
             })
             .eq('fixture_id', fixtureId)
             .eq('game_number', gameNumber);
@@ -596,7 +653,7 @@ async getCurrentWeek(): Promise<number> {
               fixture_id: fixtureId,
               game_number: gameNumber,
               our_player_id: playerId,
-              opponent_name: 'Opposition Player',
+              opponent_name: opponentName,
               result: 'loss' // Temporary result - will be updated when game is completed
             });
 
@@ -670,6 +727,18 @@ async getCurrentWeek(): Promise<number> {
   }>): Promise<void> {
     try {
       await retryDatabaseOperation(async () => {
+        // Get the fixture to obtain the opposition team name
+        const { data: fixture, error: fixtureError } = await supabase
+          .from('fixtures')
+          .select('opposition')
+          .eq('id', fixtureId)
+          .single();
+
+        if (fixtureError) {
+          console.error('Error fetching fixture for opponent name:', fixtureError);
+          throw fixtureError;
+        }
+
         // Start a transaction by batching operations
         const operations = [];
 
@@ -692,6 +761,11 @@ async getCurrentWeek(): Promise<number> {
 
         // Save each game result
         for (const game of gameResults) {
+          // Format opponent name as "[Team Name] Player [Game Number]"
+          const opponentName = fixture?.opposition 
+            ? `${fixture.opposition} Player ${game.gameNumber}`
+            : `Opposition Player ${game.gameNumber}`;
+
           operations.push(
             supabase
               .from('league_games')
@@ -699,7 +773,7 @@ async getCurrentWeek(): Promise<number> {
                 fixture_id: fixtureId,
                 game_number: game.gameNumber,
                 our_player_id: game.playerId,
-                opponent_name: 'Opposition Player',
+                opponent_name: opponentName,
                 result: game.result
               }, {
                 onConflict: 'fixture_id,game_number'
@@ -709,7 +783,7 @@ async getCurrentWeek(): Promise<number> {
           // Save game statistics if provided
           if (game.stats) {
             operations.push(
-              this.saveGameStatistics(game.stats, fixtureId)
+              this.saveGameStatistics(game.stats, fixtureId, game.gameNumber)
             );
 
             // Update player statistics

@@ -111,13 +111,18 @@ export const canCompleteTurn: Readable<boolean> = derived(
 // Store actions/methods
 export const scoringActions = {
   // Initialize a new game
-  initializeGame: (gameId: string, homePlayer: string, awayPlayer: string, gameType: GameState['gameType'] = 'league') => {
+  initializeGame: (gameId: string, homePlayer: string, awayPlayer: string, gameType: GameState['gameType'] = 'league', venue?: 'home' | 'away') => {
+    // Determine who throws first based on venue:
+    // HOME: Our player throws SECOND (opponent throws first)
+    // AWAY: Our player throws FIRST
+    const firstThrower = venue === 'home' ? 'away' : 'home';
+    
     gameState.set({
       gameId,
       currentLeg: 1,
       homeScore: 501,
       awayScore: 501,
-      currentThrower: 'home',
+      currentThrower: firstThrower,
       dartsThrown: 0,
       gameComplete: false,
       gameType
