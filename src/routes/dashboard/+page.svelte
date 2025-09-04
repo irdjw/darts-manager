@@ -38,15 +38,26 @@
       ]);
       
       allFixtures = allFixturesData || [];
-      // Find current fixture (next upcoming match)
+      // Find current fixture - week starts day before fixture date
       const now = new Date();
-      currentFixtureIndex = allFixtures.findIndex(f => 
-        f.status === 'to_play' && new Date(f.match_date) >= now
-      );
+      currentFixtureIndex = allFixtures.findIndex(f => {
+        if (f.status !== 'to_play') return false;
+        const fixtureDate = new Date(f.match_date);
+        const weekStartDate = new Date(fixtureDate);
+        weekStartDate.setDate(fixtureDate.getDate() - 1); // Week starts day before fixture
+        return weekStartDate <= now;
+      });
+      
+      // If no current week found, find the next upcoming fixture
       if (currentFixtureIndex === -1) {
-        // If no upcoming matches, find the first 'to_play' fixture
-        currentFixtureIndex = allFixtures.findIndex(f => f.status === 'to_play');
-        if (currentFixtureIndex === -1) currentFixtureIndex = 0;
+        currentFixtureIndex = allFixtures.findIndex(f => 
+          f.status === 'to_play' && new Date(f.match_date) >= now
+        );
+        if (currentFixtureIndex === -1) {
+          // If no upcoming matches, find the first 'to_play' fixture
+          currentFixtureIndex = allFixtures.findIndex(f => f.status === 'to_play');
+          if (currentFixtureIndex === -1) currentFixtureIndex = 0;
+        }
       }
       
       currentFixture = allFixtures[currentFixtureIndex] || null;
