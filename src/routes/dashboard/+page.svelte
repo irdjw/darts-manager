@@ -38,9 +38,12 @@
       ]);
       
       allFixtures = allFixturesData || [];
-      // Find current fixture - lowest week number where result = "to_play"
-      currentFixtureIndex = allFixtures.findIndex(f => f.status === 'to_play');
-      if (currentFixtureIndex === -1) currentFixtureIndex = 0;
+      // Find current fixture - lowest week number where result = "to_play" 
+      currentFixtureIndex = allFixtures.findIndex(f => f.result === 'to_play');
+      if (currentFixtureIndex === -1) {
+        // If no to_play fixtures, show the most recent one
+        currentFixtureIndex = allFixtures.length > 0 ? allFixtures.length - 1 : 0;
+      }
       
       currentFixture = allFixtures[currentFixtureIndex] || null;
       stats = statsData;
@@ -208,7 +211,7 @@
                         <span class="text-2xl">🏆</span>
                       {:else if currentFixture.result === 'loss'}
                         <span class="text-2xl">⏰</span>
-                      {:else if currentFixture.status === 'to_play'}
+                      {:else if currentFixture.result === 'to_play'}
                         <span class="text-2xl">🎯</span>
                       {/if}
                     </div>
@@ -225,9 +228,7 @@
                     <span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium block mb-2">
                       {currentFixture.result === 'win' ? 'Won' : 
                        currentFixture.result === 'loss' ? 'Lost' : 
-                       currentFixture.status === 'to_play' ? 'Upcoming' : 
-                       currentFixture.status === 'completed' ? 'Completed' : 
-                       currentFixture.status === 'in_progress' ? 'In Progress' : 'Unknown'}
+                       currentFixture.result === 'to_play' ? 'Upcoming' : 'Unknown'}
                     </span>
                     {#if allFixtures.length > 1}
                       <p class="text-xs text-gray-400">Swipe to navigate</p>
