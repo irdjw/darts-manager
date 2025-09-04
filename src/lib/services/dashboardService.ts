@@ -252,49 +252,17 @@ export class DashboardService {
    */
 async getCurrentWeek(): Promise<number> {
   try {
-    const now = new Date();
-    
-    // Find current week - week starts day before fixture date
-    const { data: fixtures } = await supabase
-      .from('fixtures')
-      .select('week_number, match_date')
-      .eq('league_year', '2025/26')
-      .eq('status', 'to_play')
-      .order('week_number', { ascending: true });
-    
-    if (fixtures && fixtures.length > 0) {
-      // Find the fixture where week has started (day before fixture date)
-      for (const fixture of fixtures) {
-        const fixtureDate = new Date(fixture.match_date);
-        const weekStartDate = new Date(fixtureDate);
-        weekStartDate.setDate(fixtureDate.getDate() - 1); // Week starts day before fixture
-        
-        if (weekStartDate <= now && now <= fixtureDate) {
-          return fixture.week_number; // Current active week
-        }
-      }
-      
-      // If we're before all weeks start, return the first upcoming week
-      const firstUpcoming = fixtures[0];
-      const firstFixtureDate = new Date(firstUpcoming.match_date);
-      const firstWeekStart = new Date(firstFixtureDate);
-      firstWeekStart.setDate(firstFixtureDate.getDate() - 1);
-      
-      if (now < firstWeekStart) {
-        return firstUpcoming.week_number;
-      }
-    }
-    
-    // Fallback: get the latest fixture if no active week found
-    const { data: lastFixture } = await supabase
+    // Get the lowest week number where result = "to_play"
+    const { data: currentFixture } = await supabase
       .from('fixtures')
       .select('week_number')
       .eq('league_year', '2025/26')
-      .order('week_number', { ascending: false })
+      .eq('result', 'to_play')
+      .order('week_number', { ascending: true })
       .limit(1)
       .single();
     
-    return lastFixture ? lastFixture.week_number : 1;
+    return currentFixture ? currentFixture.week_number : 1;
     
   } catch (err: any) {
     console.error('getCurrentWeek error:', err);
