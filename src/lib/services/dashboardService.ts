@@ -386,9 +386,9 @@ async getCurrentWeek(): Promise<number> {
       total_180s: 0,
       win_percentage: 0,
       highest_checkout: 0,
-      last_result: undefined,
+      last_result: null,
       consecutive_losses: 0,
-      drop_week: undefined
+      drop_week: null
     };
   }
 
@@ -501,14 +501,14 @@ async getCurrentWeek(): Promise<number> {
         };
 
         // Calculate win percentage
-        updatedStats.win_percentage = updatedStats.games_played > 0 
+        const win_percentage = updatedStats.games_played > 0 
           ? Math.round((updatedStats.games_won / updatedStats.games_played) * 100 * 100) / 100
           : 0;
 
         // Update player in database
         const { error: updateError } = await supabase
           .from('players')
-          .update(updatedStats)
+          .update({ ...updatedStats, win_percentage })
           .eq('id', playerId);
 
         if (updateError) {
@@ -518,6 +518,155 @@ async getCurrentWeek(): Promise<number> {
       });
     } catch (err: any) {
       console.error('updatePlayerStats error:', err);
+      throw new Error(handleDatabaseError(err));
+    }
+  }
+
+  /**
+   * Get existing league game assignments for a fixture
+   */
+  async getLeagueGameAssignments(fixtureId: string): Promise<Array<{
+    game_number: number;
+    our_player_id: string;
+    opponent_name?: string;
+    result?: 'win' | 'loss';
+    is_completed?: boolean;
+  }>> {
+    try {
+      const { data, error } = await supabase
+        .from('league_games')
+        .select(`
+          game_number,
+          our_player_id,
+          opponent_name,
+          result,
+          created_at
+        `)
+        .eq('fixture_id', fixtureId)
+        .order('game_number', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching league game assignments:', error);
+        throw error;
+      }
+
+      // Get completed games from game_statistics to determine which results are real
+      const { data: completedGames, error: statsError } = await supabase
+        .from('game_statistics')
+        .select('game_session_id, player_id')
+        .eq('fixture_id', fixtureId);
+
+      if (statsError) {
+        console.warn('Could not fetch game statistics:', statsError);
+      }
+
+      const completedPlayerIds = new Set(completedGames?.map(g => g.player_id) || []);
+
+      return (data || []).map(game => ({
+        ...game,
+        is_completed: completedPlayerIds.has(game.our_player_id)
+      }));
+    } catch (err: any) {
+      console.error('getLeagueGameAssignments error:', err);
+      throw new Error(handleDatabaseError(err));
+    }
+  }
+
+  /**
+   * Save or update a single game assignment
+   */
+  async saveGameAssignment(fixtureId: string, gameNumber: number, playerId: string): Promise<void> {
+    try {
+      await retryDatabaseOperation(async () => {
+        // First check if the assignment already exists
+        const { data: existingGame } = await supabase
+          .from('league_games')
+          .select('id, result')
+          .eq('fixture_id', fixtureId)
+          .eq('game_number', gameNumber)
+          .single();
+
+        if (existingGame) {
+          // Update only the player assignment, preserve existing result
+          const { error } = await supabase
+            .from('league_games')
+            .update({
+              our_player_id: playerId,
+              opponent_name: 'Opposition Player'
+            })
+            .eq('fixture_id', fixtureId)
+            .eq('game_number', gameNumber);
+
+          if (error) {
+            console.error('Error updating game assignment:', error);
+            throw error;
+          }
+        } else {
+          // Create new assignment with temporary result that satisfies schema
+          const { error } = await supabase
+            .from('league_games')
+            .insert({
+              fixture_id: fixtureId,
+              game_number: gameNumber,
+              our_player_id: playerId,
+              opponent_name: 'Opposition Player',
+              result: 'loss' // Temporary result - will be updated when game is completed
+            });
+
+          if (error) {
+            console.error('Error saving game assignment:', error);
+            throw error;
+          }
+        }
+      });
+    } catch (err: any) {
+      console.error('saveGameAssignment error:', err);
+      throw new Error(handleDatabaseError(err));
+    }
+  }
+
+  /**
+   * Remove a game assignment
+   */
+  async removeGameAssignment(fixtureId: string, gameNumber: number): Promise<void> {
+    try {
+      await retryDatabaseOperation(async () => {
+        const { error } = await supabase
+          .from('league_games')
+          .delete()
+          .eq('fixture_id', fixtureId)
+          .eq('game_number', gameNumber);
+
+        if (error) {
+          console.error('Error removing game assignment:', error);
+          throw error;
+        }
+      });
+    } catch (err: any) {
+      console.error('removeGameAssignment error:', err);
+      throw new Error(handleDatabaseError(err));
+    }
+  }
+
+  /**
+   * Update game result
+   */
+  async updateGameResult(fixtureId: string, gameNumber: number, result: 'win' | 'loss'): Promise<void> {
+    try {
+      await retryDatabaseOperation(async () => {
+        const { error } = await supabase
+          .from('league_games')
+          .update({ result })
+          .eq('fixture_id', fixtureId)
+          .eq('game_number', gameNumber);
+
+        if (error) {
+          console.error('Error updating game result:', error);
+          throw error;
+        }
+      });
+    } catch (err: any) {
+      console.error('updateGameResult error:', err);
       throw new Error(handleDatabaseError(err));
     }
   }

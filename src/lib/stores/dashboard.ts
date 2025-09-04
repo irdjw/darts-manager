@@ -106,14 +106,14 @@ export class DashboardService {
     return data || [];
   }
   
-  async markAttendance(playerId: string, weekNumber: number, attended: boolean): Promise<void> {
+  async markAttendance(playerId: string, weekNumber: number, available: boolean): Promise<void> {
     const { error } = await supabase
       .from('attendance')
       .upsert({
         player_id: playerId,
         week_number: weekNumber,
         league_year: '2025/26',
-        attended
+        available
       });
     
     if (error) {

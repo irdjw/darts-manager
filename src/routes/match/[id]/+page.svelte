@@ -35,34 +35,111 @@
     result: 'win' | 'loss' | null;
   }
 
-  onMount(async () => {
-    if (fixtureId) {
-      await loadMatchData();
-      loadGameResults();
-    } else {
-      error = 'No match ID provided';
-      loading = false;
-    }
+  onMount(() => {
+    // Initialize data loading
+    const init = async () => {
+      if (fixtureId) {
+        await loadMatchData();
+      } else {
+        error = 'No match ID provided';
+        loading = false;
+      }
+    };
+    
+    init();
+
+    // Listen for visibility changes to reload when returning from scoring
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && fixtureId) {
+        checkForCompletedGames();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Return cleanup function
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   });
 
-  function loadGameResults() {
-    // Load any completed games from localStorage
-    const savedResults = JSON.parse(localStorage.getItem(`match_${fixtureId}`) || '{}');
-    
-    gameAssignments = gameAssignments.map(assignment => {
-      const gameResult = savedResults[`game_${assignment.gameNumber}`];
-      if (gameResult) {
-        const ourPlayerWon = gameResult.winner === gameResult.homePlayer;
+  // Handle game completion from scoring system
+  async function handleGameCompletion(gameNumber: number, result: 'win' | 'loss') {
+    try {
+      await dashboardService.updateGameResult(fixtureId, gameNumber, result);
+      
+      // Update local state
+      gameAssignments = gameAssignments.map(assignment => {
+        if (assignment.gameNumber === gameNumber) {
+          return {
+            ...assignment,
+            status: 'completed' as const,
+            result,
+            homeScore: result === 'win' ? 1 : 0,
+            awayScore: result === 'loss' ? 1 : 0
+          };
+        }
+        return assignment;
+      });
+    } catch (err) {
+      console.error('Error updating game result:', err);
+      error = err instanceof Error ? err.message : 'Failed to update game result';
+    }
+  }
+
+  // This function will be called when returning from the scoring system
+  async function checkForCompletedGames() {
+    // Reload assignments to pick up any completed games
+    await loadGameAssignments();
+  }
+
+  async function loadGameAssignments() {
+    // Load existing game assignments and results from database
+    try {
+      const existingGames = await dashboardService.getLeagueGameAssignments(fixtureId);
+      
+      // Map database games to our game assignment structure
+      gameAssignments = Array.from({ length: 7 }, (_, i) => {
+        const gameNumber = i + 1;
+        const existingGame = existingGames.find(g => g.game_number === gameNumber);
+        
+        if (existingGame) {
+          const player = selectedPlayers.find(p => p.id === existingGame.our_player_id);
+          const isCompleted = existingGame.is_completed || false;
+          return {
+            gameNumber,
+            playerId: existingGame.our_player_id,
+            playerName: player?.name || 'Unknown Player',
+            status: isCompleted ? 'completed' : 'pending',
+            homeScore: isCompleted && existingGame.result === 'win' ? 1 : 0,
+            awayScore: isCompleted && existingGame.result === 'loss' ? 1 : 0,
+            result: isCompleted ? (existingGame.result || null) : null
+          };
+        }
+        
         return {
-          ...assignment,
-          status: 'completed' as const,
-          result: ourPlayerWon ? 'win' : 'loss',
-          homeScore: ourPlayerWon ? 1 : 0,
-          awayScore: ourPlayerWon ? 0 : 1
+          gameNumber,
+          playerId: null,
+          playerName: null,
+          status: 'pending' as const,
+          homeScore: 0,
+          awayScore: 0,
+          result: null
         };
-      }
-      return assignment;
-    });
+      });
+      
+      // Update assigned players set
+      assignedPlayers = new Set(
+        gameAssignments
+          .filter(a => a.playerId)
+          .map(a => a.playerId!)
+      );
+      
+    } catch (err) {
+      console.warn('Could not load existing game assignments:', err);
+      // Fallback to empty assignments
+      initializeGameAssignments();
+    }
   }
 
   async function loadMatchData() {
@@ -84,15 +161,15 @@
           opposition: 'Test Opposition',
           venue: 'home',
           result: 'to_play',
-          status: 'scheduled'
+          status: 'to_play'
         };
       }
 
       // Load selected team for this week
-      await loadSelectedTeam(fixture.week_number);
+      await loadSelectedTeam(fixture!.week_number);
       
-      // Initialize game assignments
-      initializeGameAssignments();
+      // Load existing game assignments from database
+      await loadGameAssignments();
 
     } catch (err) {
       error = err instanceof Error ? err.message : 'Failed to load match data';
@@ -143,35 +220,57 @@
     }));
   }
 
-  function assignPlayerToGame(gameNumber: number, player: Player) {
+  async function assignPlayerToGame(gameNumber: number, player: Player) {
     if (assignedPlayers.has(player.id)) {
       return; // Player already assigned
     }
 
-    // Remove player from any previous assignment
-    gameAssignments = gameAssignments.map(assignment => {
-      if (assignment.playerId === player.id) {
-        if (assignment.playerId) {
-          assignedPlayers.delete(assignment.playerId);
-        }
-        return { ...assignment, playerId: null, playerName: null };
-      }
-      return assignment;
-    });
+    try {
+      saving = true;
+      error = null;
 
-    // Assign to new game
-    gameAssignments = gameAssignments.map(assignment => {
-      if (assignment.gameNumber === gameNumber) {
-        assignedPlayers.add(player.id);
-        return { ...assignment, playerId: player.id, playerName: player.name };
+      // Remove player from any previous assignment in database
+      const previousAssignment = gameAssignments.find(a => a.playerId === player.id);
+      if (previousAssignment) {
+        await dashboardService.removeGameAssignment(fixtureId, previousAssignment.gameNumber);
+        assignedPlayers.delete(player.id);
       }
-      return assignment;
-    });
+
+      // Save new assignment to database
+      await dashboardService.saveGameAssignment(fixtureId, gameNumber, player.id);
+
+      // Update local state
+      gameAssignments = gameAssignments.map(assignment => {
+        if (assignment.playerId === player.id) {
+          return { ...assignment, playerId: null, playerName: null };
+        }
+        if (assignment.gameNumber === gameNumber) {
+          assignedPlayers.add(player.id);
+          return { ...assignment, playerId: player.id, playerName: player.name };
+        }
+        return assignment;
+      });
+
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Failed to assign player';
+      console.error('Error assigning player to game:', err);
+    } finally {
+      saving = false;
+    }
   }
 
-  function removePlayerFromGame(gameNumber: number) {
+  async function removePlayerFromGame(gameNumber: number) {
     const assignment = gameAssignments.find(a => a.gameNumber === gameNumber);
-    if (assignment?.playerId) {
+    if (!assignment?.playerId) return;
+
+    try {
+      saving = true;
+      error = null;
+
+      // Remove from database
+      await dashboardService.removeGameAssignment(fixtureId, gameNumber);
+
+      // Update local state
       assignedPlayers.delete(assignment.playerId);
       gameAssignments = gameAssignments.map(a => {
         if (a.gameNumber === gameNumber) {
@@ -179,6 +278,12 @@
         }
         return a;
       });
+
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Failed to remove player';
+      console.error('Error removing player from game:', err);
+    } finally {
+      saving = false;
     }
   }
 
@@ -214,11 +319,11 @@
         return;
       }
 
-      // In a real app, save game assignments to database
-      console.log('Saving game assignments:', gameAssignments);
+      // All assignments are already saved to database when assigned
+      console.log('Game assignments already saved to database');
       
-      // Mock save success
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Just show a success message
+      await new Promise(resolve => setTimeout(resolve, 500));
       
     } catch (err) {
       error = err instanceof Error ? err.message : 'Failed to save game order';
@@ -299,8 +404,8 @@
       // Save fixture completion to database
       await dashboardService.completeFixture(fixtureId, gameResults);
 
-      // Clear localStorage after successful database save
-      localStorage.removeItem(`match_${fixtureId}`);
+      // Database operations already handled by completeFixture method
+      console.log('Fixture completed successfully');
 
       // Navigate back to dashboard
       goto('/dashboard');
@@ -340,18 +445,10 @@
           Back
         </button>
         
-        {#if gameAssignments.filter(a => a.playerId).length === 7}
-          <button
-            on:click={saveGameOrder}
-            disabled={saving}
-            class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg 
-                   text-sm font-medium min-h-[44px] transition-all touch-manipulation flex items-center"
-          >
-            {#if saving}
-              <div class="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
-            {/if}
-            Save Order
-          </button>
+        {#if gameAssignments.filter(a => a.playerId).length === 7 && !gameAssignments.every(a => a.result)}
+          <span class="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
+            All Players Assigned
+          </span>
         {/if}
       </div>
     </div>

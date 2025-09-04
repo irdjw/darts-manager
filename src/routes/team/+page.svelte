@@ -100,7 +100,7 @@
       // Separate into available and selected players
       availablePlayers = players.filter(p => {
         const attendance = attendanceRecords.find(a => a.player_id === p.id);
-        return attendance?.attended === true;
+        return attendance?.available === true;
       });
       
       selectedPlayers = availablePlayers.filter(p => {
@@ -158,7 +158,7 @@
       // Update existing record
       const updatedRecords = attendanceRecords.map(a => {
         if (a.player_id === player.id) {
-          return { ...a, attended: !a.attended, selected: false };
+          return { ...a, available: !a.available, selected: false };
         }
         return a;
       });
@@ -180,14 +180,14 @@
     // Recalculate available players
     availablePlayers = players.filter(p => {
       const attendance = attendanceRecords.find(a => a.player_id === p.id);
-      return attendance?.attended === true;
+      return attendance?.available === true;
     });
   }
 
   async function togglePlayerSelection(player: Player) {
     const attendanceRecord = attendanceRecords.find(a => a.player_id === player.id);
     
-    if (attendanceRecord && attendanceRecord.attended) {
+    if (attendanceRecord && attendanceRecord.available) {
       // Update selection
       const updatedRecords = attendanceRecords.map(a => {
         if (a.player_id === player.id) {
@@ -527,7 +527,7 @@
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {#each players as player}
               {@const attendanceRecord = attendanceRecords.find(a => a.player_id === player.id)}
-              {@const isAttending = attendanceRecord?.attended === true}
+              {@const isAttending = attendanceRecord?.available === true}
               
               <div 
                 class="p-4 border-2 rounded-lg cursor-pointer transition-all
