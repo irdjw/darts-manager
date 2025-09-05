@@ -41,9 +41,16 @@ export const handle: Handle = async ({ event, resolve }) => {
   // Set user in PageData for all routes
   event.locals.supabase = supabase;
 
-  return resolve(event, {
+  const response = await resolve(event, {
     filterSerializedResponseHeaders(name) {
       return name === 'content-range';
     },
   });
+
+  // Add no-cache headers to prevent browser caching issues
+  response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+  response.headers.set('Pragma', 'no-cache');
+  response.headers.set('Expires', '0');
+
+  return response;
 };
