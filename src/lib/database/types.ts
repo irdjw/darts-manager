@@ -93,3 +93,62 @@ export interface AuthUser {
   created_at: string;
   last_sign_in_at: string | null;
 }
+
+// Personal practice game types
+export interface PersonalGame {
+  id: string;
+  player_id: string;
+  opponent_name: string;
+  game_type: 'practice_501' | 'around_clock' | 'cricket' | 'doubles_practice' | 'checkout_practice';
+  game_date: string;
+  game_won: boolean;
+  legs_played: number;
+  legs_won: number;
+  total_time_minutes?: number;
+  notes?: string;
+  created_at: string;
+}
+
+export interface PersonalStats {
+  id: string;
+  player_id: string;
+  player_name: string;
+  game_id: string;
+  game_type: PersonalGame['game_type'];
+  opponent_name: string;
+  game_won: boolean;
+  legs_played: number;
+  legs_won: number;
+  total_darts: number;
+  total_points: number;
+  average_score: number;
+  scores_180: number;
+  scores_140_plus: number;
+  scores_100_plus: number;
+  scores_80_plus: number;
+  double_attempts: number;
+  double_hits: number;
+  double_percentage: number;
+  checkout_attempts: number;
+  checkout_hits: number;
+  checkout_percentage: number;
+  highest_checkout: number;
+  first_dart_average?: number;
+  three_dart_average: number;
+  game_date: string;
+  session_duration_minutes?: number;
+  created_at: string;
+}
+
+export interface PersonalGoal {
+  id: string;
+  player_id: string;
+  goal_type: 'average_improvement' | 'checkout_percentage' | 'consistency' | '180_count' | 'custom';
+  target_value: number;
+  current_value: number;
+  deadline_date?: string;
+  description: string;
+  achieved: boolean;
+  created_at: string;
+  achieved_at?: string;
+}
