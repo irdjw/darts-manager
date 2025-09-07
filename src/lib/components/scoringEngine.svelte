@@ -1,6 +1,7 @@
-<!-- ScoringEngine.svelte - Unified scoring engine component -->
+<!-- ScoringEngine.svelte - Mobile-first unified scoring engine component -->
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, createEventDispatcher } from 'svelte';
+  import MobileDartEntry from './MobileDartEntry.svelte';
   import { 
     gameState, 
     scoringMode, 
@@ -21,6 +22,8 @@
   import { statisticsService } from '../services/statisticsService';
   import type { ScoringEngineProps, DartThrow, PlayerGameStats, LegData } from '../types/scoring';
   import { GAME_MODES } from '../types/scoring';
+  
+  const dispatch = createEventDispatcher();
 
   // Props
   export let gameId: string;
@@ -37,6 +40,9 @@
   $: currentStartingScore = startingScore;
   export let onGameComplete: ((stats: any[]) => void) | undefined = undefined;
   export let onScoreUpdate: ((homeScore: number, awayScore: number) => void) | undefined = undefined;
+  
+  // Mobile-first mode flag
+  export let useMobileInterface: boolean = true;
 
   // Reactive state subscriptions
   let currentGameState: any;
@@ -360,31 +366,104 @@
       }
     }
   }
+
+  // Handle events from MobileDartEntry component
+  function handleDartThrown(dart: DartThrow) {
+    // Add dart to history for statistics
+    allDarts = [...allDarts, dart];
+    
+    // Dispatch to parent if needed
+    dispatch('dartThrown', { dart });
+  }
+  
+  function handleTurnComplete(turnData: { turnDarts: DartThrow[]; turnTotal: number }) {
+    // Update turn statistics
+    const turnStats = {
+      turnNumber: Math.floor(allDarts.length / 3) + 1,
+      darts: turnData.turnDarts,
+      total: turnData.turnTotal,
+      playerId: currentGameState.currentThrower === 'home' ? homePlayerId : awayPlayerId
+    };
+    
+    // Dispatch to parent if needed
+    dispatch('turnComplete', turnStats);
+  }
+  
+  function handleGameComplete(gameData: { winner: string; finalStats: any }) {
+    // Calculate final statistics
+    const finalStats = [
+      statisticsService.calculateGameStats(
+        homePlayerId,
+        homePlayerName,
+        allDarts.filter(d => d.playerId === homePlayerId),
+        allLegs.filter(l => l.playerId === homePlayerId),
+        gameData.winner === 'home'
+      ),
+      statisticsService.calculateGameStats(
+        awayPlayerId, 
+        awayPlayerName,
+        allDarts.filter(d => d.playerId === awayPlayerId),
+        allLegs.filter(l => l.playerId === awayPlayerId),
+        gameData.winner === 'away'
+      )
+    ];
+    
+    if (onGameComplete) {
+      onGameComplete(finalStats);
+    }
+    
+    dispatch('gameComplete', { stats: finalStats, winner: gameData.winner });
+  }
+  
+  function handleScoreUpdate(scoreData: { homeScore: number; awayScore: number }) {
+    if (onScoreUpdate) {
+      onScoreUpdate(scoreData.homeScore, scoreData.awayScore);
+    }
+    
+    dispatch('scoreUpdate', scoreData);
+  }
 </script>
 
-<!-- Game complete state -->
-{#if currentGameState?.gameComplete}
-  <div class="bg-white p-4 md:p-6 rounded-lg shadow-lg text-center">
-    <h2 class="text-2xl font-bold mb-4 text-green-600">Game Complete!</h2>
-    <div class="text-lg space-y-2">
-      <p><strong>Winner:</strong> {currentGameState.winner === 'home' ? homePlayerName : awayPlayerName}</p>
-      <div class="grid grid-cols-2 gap-4 mt-4">
-        <div class="text-center">
-          <p class="font-semibold">{homePlayerName}</p>
-          <p class="text-2xl {currentGameState.winner === 'home' ? 'text-green-600' : 'text-gray-600'}">
-            {currentGameState.homeScore}
-          </p>
-        </div>
-        <div class="text-center">
-          <p class="font-semibold">{awayPlayerName}</p>
-          <p class="text-2xl {currentGameState.winner === 'away' ? 'text-green-600' : 'text-gray-600'}">
-            {currentGameState.awayScore}
-          </p>
+<!-- Mobile-First Interface -->
+{#if useMobileInterface}
+  <MobileDartEntry 
+    {gameId}
+    {homePlayerName}
+    {awayPlayerName} 
+    {homePlayerId}
+    {awayPlayerId}
+    {isLeagueMatch}
+    {startingScore}
+    {venue}
+    on:dartThrown={(event) => handleDartThrown(event.detail.dart)}
+    on:turnComplete={(event) => handleTurnComplete(event.detail)}
+    on:gameComplete={(event) => handleGameComplete(event.detail)}
+    on:scoreUpdate={(event) => handleScoreUpdate(event.detail)}
+  />
+{:else}
+  <!-- Legacy Desktop Interface -->
+  {#if currentGameState?.gameComplete}
+    <div class="bg-white p-4 md:p-6 rounded-lg shadow-lg text-center">
+      <h2 class="text-2xl font-bold mb-4 text-green-600">Game Complete!</h2>
+      <div class="text-lg space-y-2">
+        <p><strong>Winner:</strong> {currentGameState.winner === 'home' ? homePlayerName : awayPlayerName}</p>
+        <div class="grid grid-cols-2 gap-4 mt-4">
+          <div class="text-center">
+            <p class="font-semibold">{homePlayerName}</p>
+            <p class="text-2xl {currentGameState.winner === 'home' ? 'text-green-600' : 'text-gray-600'}">
+              {currentGameState.homeScore}
+            </p>
+          </div>
+          <div class="text-center">
+            <p class="font-semibold">{awayPlayerName}</p>
+            <p class="text-2xl {currentGameState.winner === 'away' ? 'text-green-600' : 'text-gray-600'}">
+              {currentGameState.awayScore}
+            </p>
+          </div>
         </div>
       </div>
     </div>
-  </div>
-{:else}
+  {:else}
   <!-- Main scoring interface -->
   <div class="max-w-md mx-auto p-4 bg-gray-50 min-h-screen">
     
@@ -605,5 +684,6 @@
       </div>
     {/if}
 
-  </div>
+    </div>
+  {/if}
 {/if}

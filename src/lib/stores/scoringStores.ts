@@ -62,10 +62,31 @@ export const enhancedStats = writable<{
   checkoutAttempts: number;
   checkoutHits: number;
   highestCheckout: number;
+  gameStartTime: Date | null;
+  lastDartTime: Date | null;
+  totalGameTime: number;
 }>({
   checkoutAttempts: 0,
   checkoutHits: 0,
-  highestCheckout: 0
+  highestCheckout: 0,
+  gameStartTime: null,
+  lastDartTime: null,
+  totalGameTime: 0
+});
+
+// Mobile-specific UI state
+export const mobileUIState = writable<{
+  showStats: boolean;
+  showCheckouts: boolean;
+  isFullscreen: boolean;
+  orientation: 'portrait' | 'landscape';
+  hapticEnabled: boolean;
+}>({
+  showStats: false,
+  showCheckouts: true,
+  isFullscreen: false,
+  orientation: 'portrait',
+  hapticEnabled: true
 });
 
 // Derived stores for computed values
@@ -223,6 +244,57 @@ export const scoringActions = {
       ...status,
       [player + 'Started']: true
     }));
+    
+    // Update game start time if this is the first dart
+    enhancedStats.update(stats => ({
+      ...stats,
+      gameStartTime: stats.gameStartTime || new Date(),
+      lastDartTime: new Date()
+    }));
+  },
+  
+  // Update mobile UI state
+  updateMobileUI: (updates: Partial<{
+    showStats: boolean;
+    showCheckouts: boolean;
+    isFullscreen: boolean;
+    orientation: 'portrait' | 'landscape';
+    hapticEnabled: boolean;
+  }>) => {
+    mobileUIState.update(state => ({ ...state, ...updates }));
+  },
+  
+  // Reset game state for new game
+  resetGame: () => {
+    gameState.set({
+      gameId: '',
+      currentLeg: 1,
+      homeScore: 501,
+      awayScore: 501,
+      currentThrower: 'home',
+      dartsThrown: 0,
+      gameComplete: false,
+      gameType: 'league'
+    });
+    
+    legStartStatus.set({
+      homeStarted: false,
+      awayStarted: false
+    });
+    
+    dartHistory.set([]);
+    currentTurnDarts.set([]);
+    legHistory.set([]);
+    gameStats.set([]);
+    
+    enhancedStats.set({
+      checkoutAttempts: 0,
+      checkoutHits: 0,
+      highestCheckout: 0,
+      gameStartTime: null,
+      lastDartTime: null,
+      totalGameTime: 0
+    });
   },
 
   // Check if current player has started the leg
