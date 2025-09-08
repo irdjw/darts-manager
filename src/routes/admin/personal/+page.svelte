@@ -1,81 +1,19 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { goto } from '$app/navigation';
-  import { personalGameService } from '$lib/services/personalGameService';
-  import type { PersonalGame, PersonalStats } from '$lib/database/types';
+  import { page } from '$app/stores';
+  import PersonalPracticeHub from '$lib/components/PersonalPracticeHub.svelte';
   
-  let games: PersonalGame[] = [];
-  let stats: PersonalStats[] = [];
-  let summary = {
-    totalGames: 0,
-    gamesWon: 0,
-    winPercentage: 0,
-    total180s: 0,
-    highestCheckout: 0,
-    averageScore: 0
-  };
-  
-  let loading = true;
-  let error = '';
-  let showNewGameModal = false;
-  let opponentName = '';
-  let currentUserId = ''; // This would come from session data in real implementation
+  let currentUserId = '';
+  let playerName = 'Practice Player';
   
   onMount(async () => {
-    // In real implementation, get current user ID from session
-    currentUserId = 'current-user-id'; // Placeholder
-    await loadData();
-  });
-  
-  async function loadData() {
-    try {
-      loading = true;
-      error = '';
-      
-      const [gamesData, statsData, summaryData] = await Promise.all([
-        personalGameService.getPersonalGames(currentUserId),
-        personalGameService.getPersonalStats(currentUserId),
-        personalGameService.getPersonalStatsSummary(currentUserId)
-      ]);
-      
-      games = gamesData;
-      stats = statsData;
-      summary = summaryData;
-      
-    } catch (err: any) {
-      error = err.message || 'Failed to load personal game data';
-    } finally {
-      loading = false;
-    }
-  }
-  
-  async function startNewGame() {
-    if (!opponentName.trim()) {
-      error = 'Please enter opponent name';
-      return;
-    }
+    // In real implementation, get current user from session data
+    // For now, use a placeholder ID
+    currentUserId = 'personal-player-001';
     
-    try {
-      const gameId = await personalGameService.createPersonalGame(currentUserId, opponentName.trim());
-      showNewGameModal = false;
-      opponentName = '';
-      
-      // Navigate to personal scoring page
-      goto(`/admin/personal/scoring/${gameId}`);
-    } catch (err: any) {
-      error = err.message || 'Failed to create new game';
-    }
-  }
-  
-  function formatDate(dateString: string): string {
-    return new Date(dateString).toLocaleDateString('en-GB');
-  }
-  
-  function closeModal() {
-    showNewGameModal = false;
-    opponentName = '';
-    error = '';
-  }
+    // Could also get player name from session if available
+    // playerName = $page.data?.session?.user?.user_metadata?.full_name || 'Practice Player';
+  });
 </script>
 
 <svelte:head>
