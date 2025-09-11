@@ -101,6 +101,9 @@
     if (value === 'guest') {
       guestFormFor = playerNum;
       showGuestForm = true;
+      console.log('Opening guest form for player', playerNum);
+      // Reset the dropdown
+      target.value = '';
       return;
     }
     
@@ -130,6 +133,7 @@
   
   function handleGuestPlayerAdd(event: CustomEvent<CustomMatchPlayer>) {
     const guestPlayer = event.detail;
+    console.log('Adding guest player:', guestPlayer, 'for player', guestFormFor);
     
     if (guestFormFor === 1) {
       player1 = guestPlayer;
@@ -424,7 +428,7 @@
 
 <!-- Guest Player Form Modal -->
 {#if showGuestForm}
-  <Modal>
+  <Modal open={showGuestForm} on:close={handleGuestPlayerCancel}>
     <GuestPlayerForm
       on:add={handleGuestPlayerAdd}
       on:cancel={handleGuestPlayerCancel}

@@ -46,6 +46,7 @@
       return;
     }
     
+    console.log('Submitting guest player form with name:', name);
     loading = true;
     
     setTimeout(() => {
@@ -54,6 +55,7 @@
         is_guest: true
       };
       
+      console.log('Dispatching add event with guest player:', guestPlayer);
       dispatch('add', guestPlayer);
       loading = false;
     }, 100);
