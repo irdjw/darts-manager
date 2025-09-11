@@ -20,6 +20,7 @@
   } from '../stores/scoringStores';
   import { checkoutService } from '../services/checkoutService';
   import { statisticsService } from '../services/statisticsService';
+  import { customMatchService } from '../services/customMatchService';
   import type { ScoringEngineProps, DartThrow, PlayerGameStats, LegData } from '../types/scoring';
   import { GAME_MODES } from '../types/scoring';
   
@@ -35,6 +36,8 @@
   export let startingScore: number = 501;
   export let mode: 'dart-by-dart' | 'turn-total' | 'simple' = 'dart-by-dart';
   export let venue: 'home' | 'away' | undefined = undefined;
+  export let gameType: 'league' | 'practice' | 'custom' = 'practice';
+  export let customMatch: any = null;
   
   // Mark as used to avoid unused export warning
   $: currentStartingScore = startingScore;
@@ -73,7 +76,7 @@
       gameId, 
       homePlayerName, 
       awayPlayerName, 
-      isLeagueMatch ? 'league' : 'practice',
+      gameType,
       venue
     );
     
@@ -389,7 +392,7 @@
     dispatch('turnComplete', turnStats);
   }
   
-  function handleGameComplete(gameData: { winner: string; finalStats: any }) {
+  async function handleGameComplete(gameData: { winner: string; finalStats: any; homeLegsWon?: number; awayLegsWon?: number }) {
     // Calculate final statistics
     const finalStats = [
       statisticsService.calculateGameStats(
@@ -408,11 +411,55 @@
       )
     ];
     
+    // Handle custom match completion
+    if (gameType === 'custom' && customMatch) {
+      try {
+        // Update match progress and mark as complete
+        const winner = gameData.winner === 'home' ? 1 : 2;
+        const legsWon1 = gameData.homeLegsWon || 0;
+        const legsWon2 = gameData.awayLegsWon || 0;
+        const totalLegs = legsWon1 + legsWon2;
+        
+        await customMatchService.updateMatchProgress(
+          customMatch.id,
+          legsWon1,
+          legsWon2, 
+          totalLegs,
+          winner
+        );
+        
+        // Save leg statistics for both players
+        for (let i = 0; i < finalStats.length; i++) {
+          const playerStats = finalStats[i];
+          const playerNumber = (i === 0 ? 1 : 2) as 1 | 2;
+          const legWon = (playerNumber === 1 && gameData.winner === 'home') || 
+                        (playerNumber === 2 && gameData.winner === 'away');
+          
+          await customMatchService.saveLegStatistics(
+            customMatch.id,
+            1, // Assuming single leg for now - this could be enhanced
+            playerNumber,
+            legWon,
+            playerStats
+          );
+        }
+        
+        console.log('Custom match completed and saved');
+      } catch (err) {
+        console.error('Error saving custom match completion:', err);
+      }
+    }
+    
     if (onGameComplete) {
       onGameComplete(finalStats);
     }
     
     dispatch('gameComplete', { stats: finalStats, winner: gameData.winner });
+    
+    // For custom matches, dispatch match completion
+    if (gameType === 'custom') {
+      dispatch('matchComplete');
+    }
   }
   
   function handleScoreUpdate(scoreData: { homeScore: number; awayScore: number }) {
@@ -435,6 +482,8 @@
     {isLeagueMatch}
     {startingScore}
     {venue}
+    {gameType}
+    {customMatch}
     on:dartThrown={(event) => handleDartThrown(event.detail.dart)}
     on:turnComplete={(event) => handleTurnComplete(event.detail)}
     on:gameComplete={(event) => handleGameComplete(event.detail)}

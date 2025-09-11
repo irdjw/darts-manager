@@ -126,6 +126,11 @@ CREATE TABLE public.custom_matches (
   CONSTRAINT custom_matches_player1_id_fkey FOREIGN KEY (player1_id) REFERENCES public.players(id),
   CONSTRAINT custom_matches_player2_id_fkey FOREIGN KEY (player2_id) REFERENCES public.players(id)
 );
+
+-- Indexes for performance
+CREATE INDEX idx_custom_dart_tracking_match_leg ON custom_dart_tracking(custom_match_id, leg_number);
+CREATE INDEX idx_custom_game_statistics_match ON custom_game_statistics(custom_match_id);
+CREATE INDEX idx_custom_matches_date ON custom_matches(match_date DESC);
 CREATE TABLE public.dart_tracking (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   league_game_id uuid NOT NULL,

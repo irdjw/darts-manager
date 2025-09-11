@@ -2,6 +2,12 @@
   // All actions available to all users - no role restrictions
   const actions = [
     {
+      title: 'Custom Match',
+      href: '/custom-match',
+      color: 'bg-teal-600 hover:bg-teal-700',
+      description: 'Practice or competitive matches'
+    },
+    {
       title: 'Attendance',
       href: '/attendance',
       color: 'bg-green-600 hover:bg-green-700',

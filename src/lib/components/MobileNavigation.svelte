@@ -10,6 +10,7 @@
   // All navigation items - no role restrictions
   const navigationItems = [
     { href: '/dashboard', label: 'Dashboard', icon: '📊' },
+    { href: '/custom-match', label: 'Custom Match', icon: '🎪' },
     { href: '/statistics', label: 'Statistics', icon: '📈' },
     { href: '/attendance', label: 'Attendance', icon: '✅' },
     { href: '/team-selection', label: 'Team Selection', icon: '👥' },
