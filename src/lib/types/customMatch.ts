@@ -1,5 +1,28 @@
 export type MatchType = 'practice' | 'competitive';
 export type GameFormat = 301 | 501 | 701;
+
+// Helper type to make database and custom types compatible
+export interface CustomMatchCompatible {
+  id: string;
+  match_type: MatchType;
+  game_format: GameFormat;
+  leg_format: LegFormat;
+  player1_id?: string;
+  player1_name: string;
+  player1_is_guest: boolean;
+  player2_id?: string;
+  player2_name: string;
+  player2_is_guest: boolean;
+  first_thrower: 1 | 2;
+  winner?: 1 | 2;
+  legs_won_player1: number;
+  legs_won_player2: number;
+  total_legs_played: number;
+  match_date: string;
+  completed: boolean;
+  created_at: string;
+  updated_at: string;
+}
 export type LegFormat = 'single' | 'best_of_3' | 'best_of_5' | 'best_of_7';
 
 export interface CustomMatch {
@@ -93,8 +116,10 @@ export interface CustomMatchSetupForm {
   first_thrower: 1 | 2;
 }
 
+import type { CustomGameStatistics as DBCustomGameStatistics } from '$lib/database/types';
+
 export interface CustomMatchSummary {
-  match: CustomMatch;
-  player1_stats: CustomGameStatistics[];
-  player2_stats: CustomGameStatistics[];
+  match: CustomMatchCompatible;
+  player1_stats: DBCustomGameStatistics[];
+  player2_stats: DBCustomGameStatistics[];
 }

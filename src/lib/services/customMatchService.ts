@@ -7,7 +7,9 @@ import type {
 import type { 
   CreateCustomMatchParams, 
   CustomMatchPlayer,
-  CustomMatchSummary 
+  CustomMatchSummary,
+  CustomMatchCompatible,
+  GameFormat
 } from '$lib/types/customMatch';
 import type { DartThrow, PlayerGameStats } from '$lib/types/scoring';
 
@@ -185,7 +187,7 @@ export class CustomMatchService {
         total_darts: stats.totalDarts,
         three_dart_average: Math.round((stats.totalPoints / stats.totalDarts) * 3 * 100) / 100,
         highest_score: stats.highestScore || 0,
-        lowest_score: stats.lowestScore || 0,
+        lowest_score: 0, // PlayerGameStats doesn't track lowest score, set to 0
         total_180s: stats.scores180,
         scores_140_plus: stats.scores140Plus,
         scores_100_plus: stats.scores100Plus,
@@ -265,8 +267,14 @@ export class CustomMatchService {
       const player1Stats = statistics.filter(s => s.player_number === 1);
       const player2Stats = statistics.filter(s => s.player_number === 2);
 
+      // Convert database match to compatible format
+      const compatibleMatch: CustomMatchCompatible = {
+        ...match,
+        game_format: match.game_format as GameFormat // Safe cast since we control the values
+      };
+      
       return {
-        match,
+        match: compatibleMatch,
         player1_stats: player1Stats,
         player2_stats: player2Stats
       };
