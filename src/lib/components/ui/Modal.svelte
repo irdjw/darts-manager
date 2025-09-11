@@ -101,12 +101,6 @@
       <div class="px-6 py-4 overflow-y-auto max-h-[calc(90vh-8rem)]">
         <slot />
       </div>
-      
-      {#if $slots.footer}
-        <footer class="px-6 py-4 border-t border-slate-200 bg-slate-50">
-          <slot name="footer" />
-        </footer>
-      {/if}
     </div>
   </div>
 {/if}
