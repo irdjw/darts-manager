@@ -1,6 +1,7 @@
 <!-- MobileDartEntry.svelte - Complete mobile-first dart entry system -->
 <script lang="ts">
   import { onMount, createEventDispatcher } from 'svelte';
+  import { goto } from '$app/navigation';
   import NumberGrid from './NumberGrid.svelte';
   import DartVisualIndicators from './DartVisualIndicators.svelte';
   import LiveDartStats from './LiveDartStats.svelte';
@@ -64,12 +65,28 @@
   let errorMessage: string | null = null;
   let isLoading: boolean = false;
 
+  // British English quit match messages
+  const QUIT_MESSAGES = {
+    confirmation: 'Are you sure you want to quit this match? All progress will be lost and the match will be deleted permanently.',
+    success: 'Match cancelled and deleted successfully.',
+    error: 'Failed to cancel match. Please try again.',
+    networkError: 'Network error whilst cancelling match. Please check your connection.'
+  };
+
   // Error handling functions
   function showErrorMessage(message: string) {
     errorMessage = message;
     setTimeout(() => {
       errorMessage = null;
     }, 5000); // Clear after 5 seconds
+  }
+
+  function showSuccessMessage(message: string) {
+    // Show success message using the same error message system but with different styling
+    errorMessage = `✅ ${message}`;
+    setTimeout(() => {
+      errorMessage = null;
+    }, 3000); // Clear after 3 seconds for success messages
   }
 
   function clearErrorMessage() {
@@ -496,12 +513,42 @@
     scoringActions.resumeMatch();
   }
 
-  // Quit match
-  function quitMatch() {
-    if (confirm('Are you sure you want to quit this match? All progress will be lost.')) {
+  // Quit match with complete database deletion and navigation
+  async function quitMatch() {
+    if (!confirm(QUIT_MESSAGES.confirmation)) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      clearErrorMessage();
+      
+      // If this is a custom match, delete it from the database
+      if (gameId && !isLeagueMatch) {
+        await customMatchService.deleteMatch(gameId);
+        showSuccessMessage(QUIT_MESSAGES.success);
+      }
+      
+      // Clear local storage and game state
       scoringActions.quitMatch();
-      // Navigate back or reload page
-      window.location.reload();
+      
+      // Navigate back to custom match listing
+      await goto('/custom-match');
+      
+    } catch (error: any) {
+      console.error('Failed to quit match:', error);
+      
+      // Determine error type for appropriate message
+      const isNetworkError = error.message?.includes('network') || 
+                           error.message?.includes('connection') || 
+                           error.name === 'NetworkError';
+      
+      const errorMessage = isNetworkError ? 
+        QUIT_MESSAGES.networkError : 
+        QUIT_MESSAGES.error;
+      
+      showErrorMessage(errorMessage);
+      setLoading(false);
     }
   }
 
@@ -644,13 +691,13 @@
     </div>
   </div>
 
-  <!-- Error Message -->
+  <!-- Error/Success Message -->
   {#if errorMessage}
-    <div class="bg-red-500 text-white p-3 mx-4 mt-2 rounded-lg shadow-lg relative animate-pulse">
+    <div class="{errorMessage.startsWith('✅') ? 'bg-green-500' : 'bg-red-500'} text-white p-3 mx-4 mt-2 rounded-lg shadow-lg relative {errorMessage.startsWith('✅') ? '' : 'animate-pulse'}">
       <p class="text-sm">{errorMessage}</p>
       <button 
         on:click={clearErrorMessage}
-        class="absolute top-1 right-1 text-white hover:text-red-200 text-xl"
+        class="absolute top-1 right-1 text-white hover:text-gray-200 text-xl"
         style="touch-action: manipulation;"
       >
         ×
