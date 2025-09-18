@@ -3,7 +3,6 @@
   import { invalidate } from '$app/navigation';
   import { page } from '$app/stores';
   import { dev } from '$app/environment';
-  import { inject } from '@vercel/analytics';
   import { supabase } from '$lib/database/supabase';
   import type { LayoutData } from './$types';
   import MobileNavigation from '$lib/components/MobileNavigation.svelte';
@@ -25,7 +24,6 @@
   $: isAuthPage = $page.url.pathname.startsWith('/auth') || $page.url.pathname === '/login';
 
   // Initialise analytics
-  inject();
 
   onMount(() => {
     const cleanup = setupEventListeners();
