@@ -857,67 +857,205 @@
 {/if}
 
 <style>
-  /* Mobile viewport handling */
+  /* Main container - fixed viewport handling */
   .dart-scoring-app {
-    height: 100vh;
+    width: 100%;
+    height: var(--viewport-height);
     height: calc(var(--vh, 1vh) * 100);
+    max-height: var(--viewport-height);
+    max-height: calc(var(--vh, 1vh) * 100);
     display: flex;
     flex-direction: column;
     overflow: hidden;
     position: relative;
+    background: #1f2937;
+    
+    /* Safe area support for devices with notches */
+    padding-top: var(--safe-area-inset-top);
+    padding-bottom: var(--safe-area-inset-bottom);
+    padding-left: var(--safe-area-inset-left);
+    padding-right: var(--safe-area-inset-right);
   }
-
-  /* Prevent zoom on double tap */
+  
+  /* Prevent unwanted interactions */
   * {
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
     -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
     user-select: none;
   }
-
+  
+  /* Allow text selection for inputs and certain elements */
+  input, textarea, [contenteditable="true"] {
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+    user-select: text;
+  }
+  
   /* Smooth transitions */
   .transition-all {
     transition-property: all;
     transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
     transition-duration: 150ms;
   }
-
-  /* Custom scrollbar for webkit */
-  ::-webkit-scrollbar {
+  
+  /* Scrollable areas within the app */
+  .scrollable-area {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+  
+  /* Custom scrollbar styling */
+  .scrollable-area::-webkit-scrollbar {
     width: 4px;
   }
-
-  ::-webkit-scrollbar-track {
-    background: #1f2937;
+  
+  .scrollable-area::-webkit-scrollbar-track {
+    background: rgba(31, 41, 55, 0.1);
   }
-
-  ::-webkit-scrollbar-thumb {
-    background: #6b7280;
+  
+  .scrollable-area::-webkit-scrollbar-thumb {
+    background: rgba(107, 114, 128, 0.5);
     border-radius: 2px;
   }
-
-  /* Focus states */
-  button:focus-visible {
+  
+  .scrollable-area::-webkit-scrollbar-thumb:hover {
+    background: rgba(107, 114, 128, 0.7);
+  }
+  
+  /* Focus states for accessibility */
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible {
     outline: 3px solid #f97316;
     outline-offset: 2px;
   }
-
-  /* Prevent body scroll when modal is open */
-  .modal-open {
-    overflow: hidden;
-  }
-
-  /* Ensure minimum 44px touch targets */
-  button {
+  
+  /* Ensure minimum touch targets (44px) */
+  button, .touch-target {
     min-height: 44px;
     min-width: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
-
-  /* Prevent scrolling with proper layout constraints */
-  html, body {
-    overflow: hidden;
-    position: fixed;
+  
+  /* Flexible grid layouts that adapt to screen size */
+  .dart-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
+    gap: 8px;
     width: 100%;
-    height: 100%;
+  }
+  
+  /* Score display - responsive text sizing */
+  .score-display {
+    font-size: clamp(1.5rem, 8vw, 3rem);
+    line-height: 1.2;
+  }
+  
+  /* Input fields - full width on mobile */
+  input[type="number"],
+  input[type="text"],
+  select {
+    width: 100%;
+    min-height: 44px;
+    font-size: 16px; /* Prevent zoom on iOS */
+    border-radius: 8px;
+    border: 2px solid #374151;
+    background: #1f2937;
+    color: #f9fafb;
+    padding: 8px 12px;
+  }
+  
+  /* Modal overlays */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: var(--safe-area-inset-top) var(--safe-area-inset-right) var(--safe-area-inset-bottom) var(--safe-area-inset-left);
+  }
+  
+  .modal-content {
+    background: #1f2937;
+    border-radius: 12px;
+    padding: 24px;
+    margin: 16px;
+    max-width: 90vw;
+    max-height: 80vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Responsive breakpoints */
+  @media screen and (max-width: 480px) {
+    .dart-scoring-app {
+      font-size: 14px;
+    }
+    
+    .modal-content {
+      padding: 16px;
+      margin: 8px;
+      max-width: 95vw;
+      max-height: 85vh;
+    }
+  }
+  
+  /* Landscape orientation adjustments */
+  @media screen and (orientation: landscape) and (max-height: 500px) {
+    .dart-scoring-app {
+      font-size: 12px;
+    }
+    
+    .score-display {
+      font-size: clamp(1rem, 6vh, 2rem);
+    }
+    
+    button, .touch-target {
+      min-height: 36px;
+    }
+  }
+  
+  /* High DPI displays */
+  @media screen and (-webkit-min-device-pixel-ratio: 2) {
+    .dart-scoring-app {
+      -webkit-font-smoothing: antialiased;
+    }
+  }
+  
+  /* Dark mode support */
+  @media (prefers-color-scheme: dark) {
+    .dart-scoring-app {
+      background: #0f172a;
+    }
+  }
+  
+  /* Reduced motion preference */
+  @media (prefers-reduced-motion: reduce) {
+    .transition-all {
+      transition: none;
+    }
+  }
+  
+  /* Print styles */
+  @media print {
+    .dart-scoring-app {
+      height: auto;
+      overflow: visible;
+    }
   }
 </style>

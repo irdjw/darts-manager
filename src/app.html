@@ -3,7 +3,13 @@
   <head>
     <meta charset="utf-8" />
     <link rel="icon" href="%sveltekit.assets%/favicon.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    
+    <!-- Optimised viewport meta tag for mobile -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    
+    <!-- Prevent zoom on iOS Safari -->
+    <meta name="format-detection" content="telephone=no" />
+    
     <meta name="theme-color" content="#1e40af" />
     <meta name="description" content="Professional darts team management system for Isaac Wilson Darts Team" />
     
@@ -15,12 +21,92 @@
     <!-- Progressive Web App -->
     <link rel="manifest" href="%sveltekit.assets%/manifest.json">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Isaac Wilson Darts">
+    
+    <!-- CSS custom properties for viewport -->
+    <style>
+      :root {
+        --viewport-height: 100vh;
+        --viewport-width: 100vw;
+        --safe-area-inset-top: env(safe-area-inset-top, 0);
+        --safe-area-inset-bottom: env(safe-area-inset-bottom, 0);
+        --safe-area-inset-left: env(safe-area-inset-left, 0);
+        --safe-area-inset-right: env(safe-area-inset-right, 0);
+      }
+      
+      /* Support for dynamic viewport units */
+      @supports (height: 100dvh) {
+        :root {
+          --viewport-height: 100dvh;
+        }
+      }
+      
+      /* Base reset for mobile */
+      * {
+        box-sizing: border-box;
+      }
+      
+      html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: var(--viewport-height);
+        overflow: hidden;
+        position: relative;
+        -webkit-text-size-adjust: 100%;
+        -webkit-font-smoothing: antialiased;
+      }
+      
+      /* Prevent scrolling and zooming */
+      body {
+        overscroll-behavior: none;
+        touch-action: pan-x pan-y;
+      }
+      
+      /* Hide address bar on mobile browsers */
+      @media screen and (max-width: 768px) {
+        html {
+          height: -webkit-fill-available;
+        }
+        
+        body {
+          min-height: -webkit-fill-available;
+        }
+      }
+    </style>
     
     %sveltekit.head%
   </head>
   <body data-sveltekit-preload-data="hover" class="bg-slate-50">
     <div style="display: contents">%sveltekit.body%</div>
+    
+    <!-- Viewport height detection script -->
+    <script>
+      // Set CSS custom property for accurate viewport height
+      function setViewportHeight() {
+        const vh = window.innerHeight * 0.01;
+        document.documentElement.style.setProperty('--vh', `${vh}px`);
+      }
+      
+      // Initial set
+      setViewportHeight();
+      
+      // Update on resize and orientation change
+      window.addEventListener('resize', setViewportHeight);
+      window.addEventListener('orientationchange', () => {
+        setTimeout(setViewportHeight, 100);
+      });
+      
+      // Prevent zoom on double tap
+      let lastTouchEnd = 0;
+      document.addEventListener('touchend', function (event) {
+        const now = (new Date()).getTime();
+        if (now - lastTouchEnd <= 300) {
+          event.preventDefault();
+        }
+        lastTouchEnd = now;
+      }, false);
+    </script>
   </body>
 </html>

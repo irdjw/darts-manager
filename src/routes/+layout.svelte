@@ -208,3 +208,34 @@
     </div>
   {/if}
 </div>
+
+<style>
+  /* Layout viewport fix */
+  .min-h-screen {
+    min-height: var(--viewport-height);
+    min-height: calc(var(--vh, 1vh) * 100);
+    display: flex;
+    flex-direction: column;
+  }
+  
+  /* Remove conflicting overflow rules */
+  :global(html),
+  :global(body) {
+    overflow-x: hidden;
+    overflow-y: hidden;
+  }
+  
+  /* Mobile header adjustments */
+  header {
+    flex-shrink: 0;
+    min-height: 44px;
+  }
+  
+  /* Main content area */
+  main {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+</style>
