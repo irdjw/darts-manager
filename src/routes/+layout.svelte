@@ -1,84 +1,64 @@
 <script lang="ts">
-  import '../app.css';
   import { onMount } from 'svelte';
   import { invalidate } from '$app/navigation';
   import { page } from '$app/stores';
-  import { browser } from '$app/environment';
-  import { getSupabaseBrowserClient } from '$lib/utils/supabase-browser';
+  import { dev } from '$app/environment';
+  import { inject } from '@vercel/analytics';
+  import { supabase } from '$lib/database/supabase';
+  import type { LayoutData } from './$types';
   import MobileNavigation from '$lib/components/MobileNavigation.svelte';
-  import KeyboardHelp from '$lib/components/KeyboardHelp.svelte';
-  import ErrorBoundary from '$lib/components/ErrorBoundary.svelte';
-  import { registerServiceWorker, setupInstallPrompt, setupOfflineSync, onNetworkChange } from '$lib/utils/pwa';
-  import { initPerformanceMonitoring } from '$lib/utils/performance';
-  
-  export let data;
-  
-  let supabase: any;
+
+  export let data: LayoutData;
+
+  // Navigation state
   let mobileMenuOpen = false;
   let isOnline = true;
   let showInstallPrompt = false;
   let showUpdateNotification = false;
-  
-  $: isAuthenticated = !!data?.session?.user;
-  $: isAuthPage = $page.route.id === '/auth' || $page.route.id === '/';
-  
-  // Initialize Supabase client-side
+
+  // Auth derived state
+  $: session = data.session;
+  $: user = session?.user;
+  $: isAuthenticated = !!user;
+
+  // Route checks
+  $: isAuthPage = $page.url.pathname.startsWith('/auth') || $page.url.pathname === '/login';
+
+  // Initialise analytics
+  inject();
+
   onMount(() => {
-    if (!browser) return;
+    const cleanup = setupEventListeners();
     
-    try {
-      supabase = getSupabaseBrowserClient();
-    } catch (error) {
-      console.error('Failed to initialize Supabase client:', error);
-      return;
-    }
+    // Setup Supabase auth listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      invalidate('supabase:auth');
+    });
 
-    // Handle auth state changes
-    let subscription: any = null;
-    if (supabase && supabase.auth) {
-      const authListener = supabase.auth.onAuthStateChange((event, session) => {
-        console.log('Auth state changed:', event);
-        
-        if (session?.expires_at !== data.session?.expires_at) {
-          // Invalidate data when auth state changes
-          invalidate('supabase:auth');
-        }
-      });
-      subscription = authListener.data?.subscription || authListener;
-    }
-
-    // Setup PWA features
-    setupPWA();
-    
-    // Initialize performance monitoring
-    initPerformanceMonitoring();
-    
     return () => {
-      if (subscription && typeof subscription.unsubscribe === 'function') {
-        subscription.unsubscribe();
-      }
+      cleanup();
+      subscription?.unsubscribe();
     };
   });
 
-  async function setupPWA() {
-    // Register service worker
-    await registerServiceWorker();
-    
-    // Setup install prompt
-    setupInstallPrompt();
-    
-    // Setup offline sync
-    setupOfflineSync();
-    
-    // Monitor network status
-    const cleanup = onNetworkChange((online) => {
-      isOnline = online;
-      if (!online) {
-        console.log('App went offline');
+  function setupEventListeners() {
+    // Network status
+    function updateOnlineStatus() {
+      isOnline = navigator.onLine;
+      if (isOnline) {
+        console.log('Back online');
       } else {
-        console.log('App came back online');
+        console.log('Gone offline');
       }
-    });
+    }
+
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+    
+    const cleanup = () => {
+      window.removeEventListener('online', updateOnlineStatus);
+      window.removeEventListener('offline', updateOnlineStatus);
+    };
     
     // PWA event listeners
     window.addEventListener('pwa-installable', () => {
@@ -132,25 +112,22 @@
           <!-- Quick logout link for mobile -->
           <a
             href="/logout"
-            class="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 
-                   transition-colors lg:hidden"
+            class="text-gray-500 hover:text-gray-700 p-2"
             aria-label="Sign out"
           >
-            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
                     d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
             </svg>
           </a>
           
-          <!-- Mobile menu button -->
+          <!-- Mobile menu toggle -->
           <button
-            type="button"
-            class="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 
-                   transition-colors lg:hidden"
             on:click={toggleMobileMenu}
-            aria-label="Open menu"
+            class="text-gray-500 hover:text-gray-700 p-2"
+            aria-label="Open mobile menu"
           >
-            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
                     d="M4 6h16M4 12h16M4 18h16" />
             </svg>
@@ -159,27 +136,21 @@
       </div>
     </header>
   {/if}
-  
+
   <!-- Main Content -->
-  <ErrorBoundary>
-    <main class="flex-1" id="main-content">
-      <slot />
-    </main>
-  </ErrorBoundary>
-  
-  <!-- Global Components -->
-  <KeyboardHelp />
-  
-  <!-- Network Status Indicator -->
+  <main class="main-content">
+    <slot />
+  </main>
+
+  <!-- Offline Indicator -->
   {#if !isOnline}
-    <div class="fixed bottom-4 left-4 right-4 bg-orange-100 border border-orange-200 rounded-lg p-3 z-40">
+    <div class="fixed bottom-4 left-4 right-4 bg-orange-100 border border-orange-200 rounded-lg p-3 z-50">
       <div class="flex items-center space-x-2">
         <svg class="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                d="M18.364 5.636l-12.728 12.728m0-12.728l12.728 12.728" />
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 15.5c-.77.833.192 2.5 1.732 2.5z" />
         </svg>
-        <span class="text-orange-800 text-sm font-medium">You're offline</span>
-        <span class="text-orange-600 text-xs">Some features may be limited</span>
+        <span class="text-orange-800 text-sm">You're offline. Some features may be limited.</span>
       </div>
     </div>
   {/if}
@@ -210,32 +181,37 @@
 </div>
 
 <style>
-  /* Layout viewport fix */
-  .min-h-screen {
-    min-height: var(--viewport-height);
-    min-height: calc(var(--vh, 1vh) * 100);
-    display: flex;
-    flex-direction: column;
+  /* Force viewport fit */
+  :global(.min-h-screen) {
+    height: 100vh !important;
+    min-height: 100vh !important;
+    max-height: 100vh !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
   }
   
-  /* Remove conflicting overflow rules */
+  /* Main content fills available space */
+  :global(.main-content) {
+    flex: 1 !important;
+    overflow: hidden !important;
+    height: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  
+  /* Remove any body/html scroll */
   :global(html),
   :global(body) {
-    overflow-x: hidden;
-    overflow-y: hidden;
+    overflow: hidden !important;
+    height: 100vh !important;
+    position: fixed !important;
+    width: 100% !important;
   }
   
   /* Mobile header adjustments */
   header {
     flex-shrink: 0;
     min-height: 44px;
-  }
-  
-  /* Main content area */
-  main {
-    flex: 1;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
   }
 </style>
