@@ -857,125 +857,108 @@
 {/if}
 
 <style>
-  /* Main container - fixed viewport handling */
+  /* Simple mobile-first container */
   .dart-scoring-app {
-    width: 100%;
-    height: var(--viewport-height);
-    height: calc(var(--vh, 1vh) * 100);
-    max-height: var(--viewport-height);
-    max-height: calc(var(--vh, 1vh) * 100);
+    width: 100vw;
+    height: 100vh;
+    max-height: 100vh;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
-    position: relative;
     background: #1f2937;
-    
-    /* Safe area support for devices with notches */
-    padding-top: var(--safe-area-inset-top);
-    padding-bottom: var(--safe-area-inset-bottom);
-    padding-left: var(--safe-area-inset-left);
-    padding-right: var(--safe-area-inset-right);
+    position: relative;
   }
   
-  /* Prevent unwanted interactions */
+  /* Prevent scrolling and zooming */
   * {
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
-    -webkit-touch-callout: none;
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    user-select: none;
+    box-sizing: border-box;
   }
   
-  /* Allow text selection for inputs and certain elements */
-  input, textarea, [contenteditable="true"] {
-    -webkit-user-select: text;
-    -moz-user-select: text;
-    -ms-user-select: text;
-    user-select: text;
+  /* Make sections flexible but constrained */
+  .score-section {
+    flex: 0 0 auto;
+    min-height: 0;
   }
   
-  /* Smooth transitions */
-  .transition-all {
-    transition-property: all;
-    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    transition-duration: 150ms;
+  .input-section {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
   
-  /* Scrollable areas within the app */
-  .scrollable-area {
-    flex: 1;
-    overflow-y: auto;
-    overflow-x: hidden;
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior: contain;
+  .bottom-section {
+    flex: 0 0 auto;
+    min-height: 0;
   }
   
-  /* Custom scrollbar styling */
-  .scrollable-area::-webkit-scrollbar {
-    width: 4px;
+  /* Force all child containers to respect parent height */
+  .dart-scoring-app > * {
+    min-height: 0;
+    flex-shrink: 0;
   }
   
-  .scrollable-area::-webkit-scrollbar-track {
-    background: rgba(31, 41, 55, 0.1);
+  /* Input grids - make them fit available space */
+  .number-grid,
+  .dart-grid {
+    display: grid;
+    gap: 8px;
+    height: 100%;
+    width: 100%;
   }
   
-  .scrollable-area::-webkit-scrollbar-thumb {
-    background: rgba(107, 114, 128, 0.5);
-    border-radius: 2px;
+  .number-grid {
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(6, 1fr);
   }
   
-  .scrollable-area::-webkit-scrollbar-thumb:hover {
-    background: rgba(107, 114, 128, 0.7);
-  }
-  
-  /* Focus states for accessibility */
-  button:focus-visible,
-  input:focus-visible,
-  select:focus-visible {
-    outline: 3px solid #f97316;
-    outline-offset: 2px;
-  }
-  
-  /* Ensure minimum touch targets (44px) */
-  button, .touch-target {
+  /* Buttons must fit within their grid cells */
+  button {
     min-height: 44px;
-    min-width: 44px;
+    width: 100%;
+    height: 100%;
+    max-height: 100px;
     display: flex;
     align-items: center;
     justify-content: center;
+    font-size: clamp(12px, 3vw, 18px);
+    padding: 4px;
   }
   
-  /* Flexible grid layouts that adapt to screen size */
-  .dart-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
-    gap: 8px;
-    width: 100%;
-  }
-  
-  /* Score display - responsive text sizing */
+  /* Score displays - flexible but not too big */
   .score-display {
-    font-size: clamp(1.5rem, 8vw, 3rem);
-    line-height: 1.2;
+    font-size: clamp(2rem, 8vw, 4rem);
+    line-height: 1;
   }
   
-  /* Input fields - full width on mobile */
-  input[type="number"],
-  input[type="text"],
-  select {
+  /* Turn info */
+  .turn-info {
+    font-size: clamp(0.875rem, 2.5vw, 1.25rem);
+  }
+  
+  /* Responsive text everywhere */
+  .text-responsive {
+    font-size: clamp(0.75rem, 2vw, 1rem);
+  }
+  
+  /* Force fit for containers */
+  .container {
+    height: 100%;
+    max-height: 100%;
+    overflow: hidden;
+  }
+  
+  /* Input fields */
+  input {
+    font-size: 16px; /* Prevent zoom on iOS */
     width: 100%;
     min-height: 44px;
-    font-size: 16px; /* Prevent zoom on iOS */
-    border-radius: 8px;
-    border: 2px solid #374151;
-    background: #1f2937;
-    color: #f9fafb;
-    padding: 8px 12px;
   }
   
-  /* Modal overlays */
+  /* Modals - constrain to viewport */
   .modal-overlay {
     position: fixed;
     top: 0;
@@ -987,75 +970,33 @@
     align-items: center;
     justify-content: center;
     z-index: 1000;
-    padding: var(--safe-area-inset-top) var(--safe-area-inset-right) var(--safe-area-inset-bottom) var(--safe-area-inset-left);
+    padding: 16px;
   }
   
   .modal-content {
     background: #1f2937;
     border-radius: 12px;
-    padding: 24px;
-    margin: 16px;
+    padding: 16px;
     max-width: 90vw;
     max-height: 80vh;
     overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
+    width: 100%;
   }
   
-  /* Responsive breakpoints */
-  @media screen and (max-width: 480px) {
-    .dart-scoring-app {
-      font-size: 14px;
-    }
-    
-    .modal-content {
-      padding: 16px;
-      margin: 8px;
-      max-width: 95vw;
-      max-height: 85vh;
-    }
-  }
-  
-  /* Landscape orientation adjustments */
-  @media screen and (orientation: landscape) and (max-height: 500px) {
-    .dart-scoring-app {
-      font-size: 12px;
+  /* Landscape mode - make everything smaller */
+  @media (orientation: landscape) and (max-height: 600px) {
+    button {
+      min-height: 36px;
+      max-height: 60px;
     }
     
     .score-display {
-      font-size: clamp(1rem, 6vh, 2rem);
+      font-size: clamp(1.5rem, 6vw, 3rem);
     }
     
-    button, .touch-target {
-      min-height: 36px;
+    .modal-content {
+      max-height: 90vh;
     }
   }
-  
-  /* High DPI displays */
-  @media screen and (-webkit-min-device-pixel-ratio: 2) {
-    .dart-scoring-app {
-      -webkit-font-smoothing: antialiased;
-    }
-  }
-  
-  /* Dark mode support */
-  @media (prefers-color-scheme: dark) {
-    .dart-scoring-app {
-      background: #0f172a;
-    }
-  }
-  
-  /* Reduced motion preference */
-  @media (prefers-reduced-motion: reduce) {
-    .transition-all {
-      transition: none;
-    }
-  }
-  
-  /* Print styles */
-  @media print {
-    .dart-scoring-app {
-      height: auto;
-      overflow: visible;
-    }
-  }
+</style>
 </style>
