@@ -7,6 +7,8 @@
   import CheckoutSuggestions from './CheckoutSuggestions.svelte';
   import { 
     gameState, 
+    gameStatus,
+    matchFormat,
     currentTurnDarts, 
     currentScore, 
     currentDartsRemaining,
@@ -15,9 +17,12 @@
     legStartStatus,
     showCheckouts,
     checkoutRoutes,
+    canUndo,
+    canRedo,
     scoringActions
   } from '../stores/scoringStores';
   import { checkoutService } from '../services/checkoutService';
+  import { customMatchService } from '../services/customMatchService';
   import type { DartThrow, CheckoutRoute } from '../types/scoring';
 
   const dispatch = createEventDispatcher<{
@@ -47,11 +52,33 @@
   let legStartStatusValue: any = { homeStarted: false, awayStarted: false };
   let showCheckoutsValue: boolean = true;
   let checkoutRoutesValue: CheckoutRoute[] = [];
+  let canUndoValue: boolean = false;
+  let canRedoValue: boolean = false;
+  let gameStatusValue: 'setup' | 'playing' | 'paused' | 'finished' = 'setup';
+  let matchFormatValue: any = { legFormat: 'single', homeLegsWon: 0, awayLegsWon: 0, requiredLegs: 1 };
 
   // UI state
   let showStats: boolean = false;
   let gameInitialized: boolean = false;
   let lastDartAnimation: number | null = null;
+  let errorMessage: string | null = null;
+  let isLoading: boolean = false;
+
+  // Error handling functions
+  function showErrorMessage(message: string) {
+    errorMessage = message;
+    setTimeout(() => {
+      errorMessage = null;
+    }, 5000); // Clear after 5 seconds
+  }
+
+  function clearErrorMessage() {
+    errorMessage = null;
+  }
+
+  function setLoading(loading: boolean) {
+    isLoading = loading;
+  }
 
   // Haptic feedback simulation
   function triggerHaptic() {
@@ -81,7 +108,11 @@
       currentLegStats.subscribe(value => statsValue = value),
       legStartStatus.subscribe(value => legStartStatusValue = value),
       showCheckouts.subscribe(value => showCheckoutsValue = value),
-      checkoutRoutes.subscribe(value => checkoutRoutesValue = value)
+      checkoutRoutes.subscribe(value => checkoutRoutesValue = value),
+      canUndo.subscribe(value => canUndoValue = value),
+      canRedo.subscribe(value => canRedoValue = value),
+      gameStatus.subscribe(value => gameStatusValue = value),
+      matchFormat.subscribe(value => matchFormatValue = value)
     ];
 
     return () => unsubscribers.forEach(unsub => unsub());
@@ -119,7 +150,8 @@
     
     // Validate dart score
     if (!isValidDartScore(dartScore)) {
-      alert('Invalid dart score! Please check your selection.');
+      showErrorMessage('Invalid dart score! Please check your selection.');
+      triggerHaptic();
       return;
     }
     
@@ -127,7 +159,7 @@
   }
 
   // Add a dart to the current turn
-  function addDart(dartScore: number, isDouble: boolean = false) {
+  async function addDart(dartScore: number, isDouble: boolean = false) {
     triggerHaptic();
     
     // Check if player has started the leg (must start on double)
@@ -137,7 +169,8 @@
     
     // If player hasn't started and this isn't a double, reject the dart
     if (!hasPlayerStarted && dartScore > 0 && !isDouble) {
-      alert('You must start on a double! Please throw at a double to begin scoring.');
+      showErrorMessage('You must start on a double! Please throw at a double to begin scoring.');
+      triggerHaptic();
       return;
     }
 
@@ -145,13 +178,15 @@
     
     // Enhanced checkout detection
     const wasCheckoutOpportunity = checkoutService.isCheckoutOpportunity(currentScoreValue);
-    const isValidFinish = newScore === 0 && isDouble;
     
-    // Check for bust
-    if (newScore < 0 || newScore === 1) {
+    // Validate finish attempt
+    const finishValidation = validateFinish(currentScoreValue, dartScore, isDouble);
+    if (finishValidation.isBust) {
       handleBust();
       return;
     }
+    
+    const isValidFinish = finishValidation.isValidFinish;
 
     // If this is the first scoring dart and it's a double, mark player as started
     if (!hasPlayerStarted && dartScore > 0 && isDouble) {
@@ -173,6 +208,35 @@
       playerId: currentGameState.currentThrower === 'home' ? homePlayerId : awayPlayerId
     };
 
+    // Save dart to database if this is a custom match
+    if (gameId && !isLeagueMatch) {
+      try {
+        setLoading(true);
+        await customMatchService.saveDartThrow(
+          gameId,
+          dartThrow.legNumber,
+          dartThrow.turnNumber,
+          dartThrow.dartNumber as 1 | 2 | 3,
+          currentGameState.currentThrower === 'home' ? 1 : 2,
+          dartThrow.dartScore,
+          isDouble ? 2 : 1, // multiplier
+          undefined, // segment
+          0, // running total - will be updated
+          newScore, // remaining score
+          false, // is bust
+          dartThrow.isCheckoutAttempt,
+          dartThrow.checkoutSuccessful
+        );
+        clearErrorMessage(); // Clear any previous errors
+      } catch (error) {
+        console.error('Failed to save dart throw:', error);
+        showErrorMessage('Failed to save dart throw. Your game continues locally, but data may not be saved.');
+        // Continue with local gameplay even if database save fails
+      } finally {
+        setLoading(false);
+      }
+    }
+
     // Add dart to current turn
     scoringActions.addDartToCurrentTurn(
       dartScore, 
@@ -180,6 +244,9 @@
       wasCheckoutOpportunity, 
       isValidFinish
     );
+
+    // Update live statistics immediately after dart
+    updateLiveStats(dartThrow.playerId, dartScore);
 
     // Dispatch dart thrown event
     dispatch('dartThrown', { dart: dartThrow });
@@ -191,38 +258,99 @@
     // Check for game completion
     if (isValidFinish) {
       completeGame();
-    } else if (currentTurnDartsValue.length >= 2) { // Will be 3 after this dart is added
+    } else if (currentTurnDartsValue.length >= 3) { // Complete after 3 darts
       setTimeout(() => completeTurn(), 100);
     }
   }
 
   // Validate dart score
   function isValidDartScore(score: number): boolean {
-    if (score === 0 || score === 25 || score === 50) return true;
-    if (score >= 1 && score <= 20) return true;
-    if (score >= 2 && score <= 40 && score % 2 === 0) return true; // Doubles
-    if (score >= 3 && score <= 60 && score % 3 === 0) return true; // Trebles
-    return false;
+    const validScores = [
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+      21, 22, 24, 25, 26, 27, 28, 30, 32, 33, 34, 36, 38, 39, 40, 42, 45, 48, 50, 
+      51, 54, 57, 60
+    ];
+    return validScores.includes(score);
+  }
+
+  // Comprehensive finish validation
+  function validateFinish(remainingScore: number, dartScore: number, isDouble: boolean): { 
+    isValidFinish: boolean; 
+    isBust: boolean; 
+    errorMessage?: string 
+  } {
+    const newScore = remainingScore - dartScore;
+    
+    // Check for standard bust conditions
+    if (newScore < 0) {
+      return { isValidFinish: false, isBust: true, errorMessage: 'Bust! Score went below zero.' };
+    }
+    
+    // Check for score of 1 (impossible to finish)
+    if (newScore === 1) {
+      return { isValidFinish: false, isBust: true, errorMessage: 'Bust! Score of 1 cannot be finished.' };
+    }
+    
+    // If not finishing (score > 0), it's a valid dart
+    if (newScore > 0) {
+      return { isValidFinish: false, isBust: false };
+    }
+    
+    // Attempting to finish (newScore === 0)
+    if (newScore === 0) {
+      // Must finish on a double
+      if (!isDouble) {
+        showErrorMessage('You must finish on a double!');
+        return { isValidFinish: false, isBust: true, errorMessage: 'Must finish on a double!' };
+      }
+      
+      // Special case for finishing with 50 (double bull)
+      if (remainingScore === 50 && dartScore === 50 && isDouble) {
+        return { isValidFinish: true, isBust: false };
+      }
+      
+      // Validate other double finishes
+      if (dartScore === remainingScore && isDouble) {
+        return { isValidFinish: true, isBust: false };
+      }
+      
+      // Invalid finish attempt
+      return { isValidFinish: false, isBust: true, errorMessage: 'Invalid finish attempt!' };
+    }
+    
+    return { isValidFinish: false, isBust: false };
   }
 
   // Handle bust scenario
-  function handleBust() {
-    alert(`Bust! Score remains ${currentScoreValue}`);
+  async function handleBust() {
+    showErrorMessage(`Bust! Score remains ${currentScoreValue}`);
     triggerHaptic();
     
-    // Dispatch turn complete with bust flag
-    dispatch('turnComplete', { 
-      turnDarts: [...currentTurnDartsValue], 
-      turnTotal: currentTurnTotalValue 
-    });
-    
-    // Switch thrower and reset turn
-    switchThrower();
-    scoringActions.clearCurrentTurn();
+    // Complete turn with bust flag - uses the same turn management
+    try {
+      await completeTurn();
+    } catch (error) {
+      console.error('Error completing bust turn:', error);
+      showErrorMessage('Error processing bust turn. Please continue with your game.');
+    }
   }
 
-  // Complete current turn
-  function completeTurn() {
+  // Single turn management function - called ONLY after 3 darts OR bust
+  async function completeTurn() {
+    // Save turn statistics to database if custom match
+    if (gameId && !isLeagueMatch && currentTurnDartsValue.length > 0) {
+      try {
+        setLoading(true);
+        await saveTurnStatistics();
+        clearErrorMessage();
+      } catch (error) {
+        console.error('Failed to save turn statistics:', error);
+        showErrorMessage('Failed to save turn statistics. Your game continues, but some data may not be saved.');
+      } finally {
+        setLoading(false);
+      }
+    }
+    
     // Update game score
     updateGameScore();
     
@@ -232,11 +360,65 @@
       turnTotal: currentTurnTotalValue 
     });
     
-    // Switch to next thrower
-    switchThrower();
+    // Switch thrower
+    gameState.update(state => ({
+      ...state,
+      currentThrower: state.currentThrower === 'home' ? 'away' : 'home',
+      dartsThrown: 0
+    }));
     
-    // Clear current turn
-    scoringActions.completeTurn(false);
+    // Clear turn
+    scoringActions.clearCurrentTurn();
+  }
+
+  // Save turn statistics to database
+  async function saveTurnStatistics() {
+    // This would calculate and save turn-level statistics
+    // For now, individual dart throws are already being saved
+    // Additional turn-level stats could be added here
+  }
+
+  // Update live statistics after each dart
+  function updateLiveStats(playerId: string, dartScore: number) {
+    // Get current player stats or create new ones
+    const currentPlayerStats = statsValue || {
+      totalDarts: 0,
+      totalPoints: 0,
+      average: 0,
+      scores80Plus: 0,
+      scores100Plus: 0,
+      scores140Plus: 0,
+      scores180: 0,
+      highestScore: 0
+    };
+
+    // Update statistics
+    currentPlayerStats.totalDarts++;
+    currentPlayerStats.totalPoints += dartScore;
+    currentPlayerStats.average = Math.round((currentPlayerStats.totalPoints / currentPlayerStats.totalDarts) * 100) / 100;
+    
+    // Calculate three-dart average
+    const threeDartAverage = (currentPlayerStats.totalPoints / currentPlayerStats.totalDarts) * 3;
+    currentPlayerStats.threeDartAverage = Math.round(threeDartAverage * 100) / 100;
+    
+    // Calculate turn total for high score tracking
+    const currentTurnTotal = currentTurnDartsValue.reduce((sum, dart) => sum + dart.dartScore, 0) + dartScore;
+    
+    // Update highest score if this turn is complete or higher
+    if (currentTurnDartsValue.length === 2 || currentTurnTotal > (currentPlayerStats.highestScore || 0)) {
+      if (currentTurnDartsValue.length === 2) { // Turn complete
+        if (currentTurnTotal === 180) currentPlayerStats.scores180++;
+        if (currentTurnTotal >= 140) currentPlayerStats.scores140Plus++;
+        if (currentTurnTotal >= 100) currentPlayerStats.scores100Plus++;
+        if (currentTurnTotal >= 80) currentPlayerStats.scores80Plus++;
+        if (currentTurnTotal > (currentPlayerStats.highestScore || 0)) {
+          currentPlayerStats.highestScore = currentTurnTotal;
+        }
+      }
+    }
+
+    // Update the stats display immediately
+    statsValue = { ...currentPlayerStats };
   }
 
   // Update game score after turn
@@ -258,26 +440,17 @@
     });
   }
 
-  // Switch to next thrower
-  function switchThrower() {
-    gameState.update(state => ({
-      ...state,
-      currentThrower: state.currentThrower === 'home' ? 'away' : 'home',
-      dartsThrown: 0
-    }));
-  }
 
-  // Complete the game
+  // Complete the game/leg
   function completeGame() {
-    gameState.update(state => ({
-      ...state,
-      gameComplete: true,
-      winner: state.currentThrower
-    }));
-
-    // Dispatch game complete event
+    const winner = currentGameState.currentThrower;
+    
+    // Complete the current leg
+    scoringActions.completeLeg(winner);
+    
+    // Dispatch leg/game complete event
     dispatch('gameComplete', { 
-      winner: currentGameState.currentThrower,
+      winner: winner,
       finalStats: { /* Add final stats calculation */ }
     });
   }
@@ -296,6 +469,12 @@
     triggerHaptic();
   }
 
+  // Redo last dart
+  function redoLastDart() {
+    scoringActions.redoLastDart();
+    triggerHaptic();
+  }
+
   // Clear current turn
   function clearCurrentTurn() {
     scoringActions.clearCurrentTurn();
@@ -306,6 +485,28 @@
   function toggleStats() {
     showStats = !showStats;
   }
+
+  // Pause match
+  function pauseMatch() {
+    scoringActions.pauseMatch();
+  }
+
+  // Resume match
+  function resumeMatch() {
+    scoringActions.resumeMatch();
+  }
+
+  // Quit match
+  function quitMatch() {
+    if (confirm('Are you sure you want to quit this match? All progress will be lost.')) {
+      scoringActions.quitMatch();
+      // Navigate back or reload page
+      window.location.reload();
+    }
+  }
+
+  // Handle mobile viewport height changes
+  let innerHeight = 0;
 
   // Handle swipe gestures
   let touchStartX = 0;
@@ -338,45 +539,69 @@
     }
   }
 
+  // Handle mobile viewport height changes
+  $: if (typeof window !== 'undefined') {
+    document.documentElement.style.setProperty('--vh', `${innerHeight * 0.01}px`);
+  }
+
   // Current player info
   $: currentPlayer = currentGameState.currentThrower === 'home' ? homePlayerName : awayPlayerName;
   $: isCurrentPlayerThrowing = true; // Could be modified for multiplayer
 </script>
 
 <!-- Main Mobile Interface -->
+<svelte:window bind:innerHeight />
 <div 
-  class="min-h-screen bg-black text-white overflow-hidden"
+  class="dart-scoring-app bg-white text-gray-900"
   on:touchstart={handleTouchStart}
   on:touchend={handleTouchEnd}
 >
   <!-- Header with Score Display -->
-  <div class="bg-gray-900 p-4 shadow-lg">
+  <div class="bg-red-600 p-4 shadow-lg">
     <!-- Game Status -->
     <div class="text-center mb-3">
-      <h1 class="text-xl font-bold text-orange-400">Darts Tracker</h1>
-      <p class="text-gray-400 text-sm">Leg {currentGameState.currentLeg || 1} • {isLeagueMatch ? 'League Match' : 'Practice Game'}</p>
+      <h1 class="text-xl font-bold text-white">Darts Tracker</h1>
+      <p class="text-red-100 text-sm">
+        {#if matchFormatValue.legFormat !== 'single'}
+          Leg {currentGameState.currentLeg || 1} of {matchFormatValue.requiredLegs * 2 - 1} • {matchFormatValue.legFormat.toUpperCase()}
+        {:else}
+          Leg {currentGameState.currentLeg || 1} • {isLeagueMatch ? 'League Match' : 'Practice Game'}
+        {/if}
+      </p>
+      
+      <!-- Leg Score Indicators for Multi-Leg Matches -->
+      {#if matchFormatValue.legFormat !== 'single'}
+        <div class="text-center mt-2">
+          <p class="text-red-100 text-xs">
+            {homePlayerName}: {matchFormatValue.homeLegsWon} • {awayPlayerName}: {matchFormatValue.awayLegsWon}
+          </p>
+          <p class="text-red-200 text-xs">
+            First to {matchFormatValue.requiredLegs} legs wins
+          </p>
+        </div>
+      {/if}
     </div>
 
     <!-- Players Score Display -->
     <div class="grid grid-cols-2 gap-4">
       <!-- Home Player -->
-      <div class="bg-gray-800 rounded-lg p-3 text-center {currentGameState.currentThrower === 'home' ? 'ring-2 ring-orange-500 bg-orange-500/10' : ''}">
-        <p class="text-gray-300 text-sm font-medium">{homePlayerName}</p>
-        <p class="text-3xl font-bold {currentGameState.currentThrower === 'home' ? 'text-orange-400' : 'text-white'}">
+      <div class="bg-white rounded-lg p-3 text-center shadow-md {currentGameState.currentThrower === 'home' ? 'ring-2 ring-red-300 bg-red-50' : ''}">
+        <p class="text-gray-600 text-sm font-medium">{homePlayerName}</p>
+        <p class="text-3xl font-bold {currentGameState.currentThrower === 'home' ? 'text-red-600' : 'text-gray-900'}">
           {currentGameState.homeScore || startingScore}
         </p>
-        <div class="text-xs {legStartStatusValue?.homeStarted ? 'text-green-400' : 'text-red-400'}">
+        <div class="text-xs {legStartStatusValue?.homeStarted ? 'text-green-600' : 'text-gray-500'}">
           {legStartStatusValue?.homeStarted ? '✓ Started' : 'Must start on double'}
         </div>
       </div>
 
       <!-- Away Player -->
-      <div class="bg-gray-800 rounded-lg p-3 text-center {currentGameState.currentThrower === 'away' ? 'ring-2 ring-orange-500 bg-orange-500/10' : ''}">
-        <p class="text-gray-300 text-sm font-medium">{awayPlayerName}</p>
-        <p class="text-3xl font-bold {currentGameState.currentThrower === 'away' ? 'text-orange-400' : 'text-white'}">
+      <div class="bg-white rounded-lg p-3 text-center shadow-md {currentGameState.currentThrower === 'away' ? 'ring-2 ring-red-300 bg-red-50' : ''}">
+        <p class="text-gray-600 text-sm font-medium">{awayPlayerName}</p>
+        <p class="text-3xl font-bold {currentGameState.currentThrower === 'away' ? 'text-red-600' : 'text-gray-900'}">
           {currentGameState.awayScore || startingScore}
         </p>
-        <div class="text-xs {legStartStatusValue?.awayStarted ? 'text-green-400' : 'text-red-400'}">
+        <div class="text-xs {legStartStatusValue?.awayStarted ? 'text-green-600' : 'text-gray-500'}">
           {legStartStatusValue?.awayStarted ? '✓ Started' : 'Must start on double'}
         </div>
       </div>
@@ -384,14 +609,66 @@
 
     <!-- Current Thrower Indicator -->
     <div class="text-center mt-3">
-      <p class="text-orange-400 font-medium">
+      <p class="text-white font-medium">
         {currentPlayer} to throw
       </p>
     </div>
+
+    <!-- Game Controls -->
+    <div class="flex justify-center gap-2 mt-3">
+      {#if gameStatusValue === 'playing'}
+        <button
+          on:click={pauseMatch}
+          class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg text-sm"
+          style="touch-action: manipulation;"
+        >
+          ⏸ PAUSE
+        </button>
+      {:else if gameStatusValue === 'paused'}
+        <button
+          on:click={resumeMatch}
+          class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg text-sm"
+          style="touch-action: manipulation;"
+        >
+          ▶ RESUME
+        </button>
+      {/if}
+      
+      <button
+        on:click={quitMatch}
+        class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg text-sm"
+        style="touch-action: manipulation;"
+      >
+        ✕ QUIT
+      </button>
+    </div>
   </div>
 
+  <!-- Error Message -->
+  {#if errorMessage}
+    <div class="bg-red-500 text-white p-3 mx-4 mt-2 rounded-lg shadow-lg relative animate-pulse">
+      <p class="text-sm">{errorMessage}</p>
+      <button 
+        on:click={clearErrorMessage}
+        class="absolute top-1 right-1 text-white hover:text-red-200 text-xl"
+        style="touch-action: manipulation;"
+      >
+        ×
+      </button>
+    </div>
+  {/if}
+
+  <!-- Loading State -->
+  {#if isLoading}
+    <div class="bg-blue-500 text-white p-2 mx-4 mt-2 rounded-lg shadow-lg">
+      <p class="text-sm text-center">💾 Saving...</p>
+    </div>
+  {/if}
+
   <!-- Main Content Area -->
-  <div class="flex-1 overflow-y-auto pb-20">
+  <div class="flex-1 overflow-y-auto"
+       style="min-height: 0; overscroll-behavior: none;"
+  >
     <!-- Dart Visual Indicators -->
     <div class="p-4">
       <DartVisualIndicators 
@@ -406,14 +683,14 @@
     <div class="px-4 mb-4">
       <button
         on:click={toggleStats}
-        class="w-full bg-gray-800 hover:bg-gray-700 rounded-lg p-3 
+        class="w-full bg-gray-100 hover:bg-gray-200 rounded-lg p-3 
                flex items-center justify-between transition-all min-h-[60px]"
         style="touch-action: manipulation;"
       >
-        <span class="text-white font-medium">
+        <span class="text-gray-900 font-medium">
           {showStats ? 'Hide' : 'Show'} Statistics
         </span>
-        <span class="text-gray-400 text-2xl {showStats ? 'rotate-180' : ''} transition-transform">
+        <span class="text-gray-600 text-2xl {showStats ? 'rotate-180' : ''} transition-transform">
           ▼
         </span>
       </button>
@@ -454,23 +731,34 @@
 
     <!-- Action Buttons -->
     <div class="p-4">
-      <div class="grid grid-cols-2 gap-3">
+      <div class="grid grid-cols-3 gap-2">
         <button
           on:click={undoLastDart}
-          disabled={currentTurnDartsValue.length === 0}
-          class="bg-yellow-600 hover:bg-yellow-500 disabled:bg-gray-700 
-                 disabled:text-gray-500 text-white font-bold py-4 rounded-xl
+          disabled={!canUndoValue}
+          class="bg-orange-600 hover:bg-orange-700 disabled:bg-gray-300 
+                 disabled:text-gray-500 text-white font-bold py-3 rounded-xl
                  transition-all active:scale-95 min-h-[60px]"
           style="touch-action: manipulation;"
         >
           ↶ UNDO
         </button>
+
+        <button
+          on:click={redoLastDart}
+          disabled={!canRedoValue}
+          class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 
+                 disabled:text-gray-500 text-white font-bold py-3 rounded-xl
+                 transition-all active:scale-95 min-h-[60px]"
+          style="touch-action: manipulation;"
+        >
+          ↷ REDO
+        </button>
         
         <button
           on:click={clearCurrentTurn}
           disabled={currentTurnDartsValue.length === 0}
-          class="bg-red-600 hover:bg-red-500 disabled:bg-gray-700 
-                 disabled:text-gray-500 text-white font-bold py-4 rounded-xl
+          class="bg-red-600 hover:bg-red-700 disabled:bg-gray-300 
+                 disabled:text-gray-500 text-white font-bold py-3 rounded-xl
                  transition-all active:scale-95 min-h-[60px]"
           style="touch-action: manipulation;"
         >
@@ -522,6 +810,16 @@
 {/if}
 
 <style>
+  /* Mobile viewport handling */
+  .dart-scoring-app {
+    height: 100vh;
+    height: calc(var(--vh, 1vh) * 100);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+  }
+
   /* Prevent zoom on double tap */
   * {
     touch-action: manipulation;
@@ -560,5 +858,19 @@
   /* Prevent body scroll when modal is open */
   .modal-open {
     overflow: hidden;
+  }
+
+  /* Ensure minimum 44px touch targets */
+  button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Prevent scrolling with proper layout constraints */
+  html, body {
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+    height: 100%;
   }
 </style>

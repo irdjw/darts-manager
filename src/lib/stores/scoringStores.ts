@@ -21,6 +21,22 @@ export const gameState = writable<GameState>({
   gameType: 'league'
 });
 
+// Match format and leg tracking
+export const matchFormat = writable<{
+  legFormat: 'single' | 'bo3' | 'bo5' | 'bo7';
+  homeLegsWon: number;
+  awayLegsWon: number;
+  requiredLegs: number;
+}>({
+  legFormat: 'single',
+  homeLegsWon: 0,
+  awayLegsWon: 0,
+  requiredLegs: 1
+});
+
+// Game status for pause/resume/quit functionality
+export const gameStatus = writable<'setup' | 'playing' | 'paused' | 'finished'>('setup');
+
 // Track whether players have started the leg (must start on double)
 export const legStartStatus = writable<{
   homeStarted: boolean;
@@ -38,6 +54,10 @@ export const dartHistory = writable<DartThrow[]>([]);
 
 // Current turn's darts (for dart-by-dart mode)
 export const currentTurnDarts = writable<DartThrow[]>([]);
+
+// Undo/Redo functionality
+export const undoStack = writable<DartThrow[][]>([]);
+export const redoStack = writable<DartThrow[][]>([]);
 
 // Turn total input (for turn-total mode)
 export const turnTotalInput = writable<string>('');
@@ -96,8 +116,28 @@ export const currentScore: Readable<number> = derived(
 );
 
 export const currentDartsRemaining: Readable<number> = derived(
-  gameState,
-  ($gameState) => 3 - $gameState.dartsThrown
+  [currentTurnDarts],
+  ([$currentTurnDarts]) => Math.max(0, 3 - $currentTurnDarts.length)
+);
+
+export const canAddDart: Readable<boolean> = derived(
+  [currentTurnDarts],
+  ([$currentTurnDarts]) => $currentTurnDarts.length < 3
+);
+
+export const dartsRemaining: Readable<number> = derived(
+  [currentTurnDarts],
+  ([$currentTurnDarts]) => Math.max(0, 3 - $currentTurnDarts.length)
+);
+
+export const canUndo: Readable<boolean> = derived(
+  [currentTurnDarts],
+  ([$currentTurnDarts]) => $currentTurnDarts.length > 0
+);
+
+export const canRedo: Readable<boolean> = derived(
+  [redoStack],
+  ([$redoStack]) => $redoStack.length > 0
 );
 
 export const isPlayerTurn: Readable<boolean> = derived(
@@ -149,6 +189,8 @@ export const scoringActions = {
       gameType
     });
     
+    gameStatus.set('playing');
+    
     legStartStatus.set({
       homeStarted: false,
       awayStarted: false
@@ -174,6 +216,11 @@ export const scoringActions = {
   addDartToCurrentTurn: (score: number, isDouble: boolean = false, isCheckoutAttempt: boolean = false, checkoutSuccessful: boolean = false) => {
     currentTurnDarts.update(darts => {
       if (darts.length >= 3) return darts; // Max 3 darts per turn
+      
+      // Save current state to undo stack before adding new dart
+      undoStack.update(stack => [...stack, [...darts]]);
+      // Clear redo stack when new action is performed
+      redoStack.set([]);
       
       const newDart: DartThrow = {
         id: crypto.randomUUID(),
@@ -223,7 +270,44 @@ export const scoringActions = {
 
   // Undo last dart
   undoLastDart: () => {
-    currentTurnDarts.update(darts => darts.slice(0, -1));
+    let lastState: DartThrow[] | undefined;
+    undoStack.update(stack => {
+      lastState = stack.pop();
+      return stack;
+    });
+    
+    if (lastState !== undefined) {
+      // Save current state to redo stack
+      redoStack.update(stack => {
+        currentTurnDarts.subscribe(current => {
+          stack.push([...current]);
+        })();
+        return stack;
+      });
+      // Restore previous state
+      currentTurnDarts.set(lastState);
+    }
+  },
+
+  // Redo last undone dart
+  redoLastDart: () => {
+    let nextState: DartThrow[] | undefined;
+    redoStack.update(stack => {
+      nextState = stack.pop();
+      return stack;
+    });
+    
+    if (nextState !== undefined) {
+      // Save current state to undo stack
+      undoStack.update(stack => {
+        currentTurnDarts.subscribe(current => {
+          stack.push([...current]);
+        })();
+        return stack;
+      });
+      // Restore next state
+      currentTurnDarts.set(nextState);
+    }
   },
 
   // Clear current turn
@@ -321,8 +405,108 @@ export const scoringActions = {
         unsubscribe();
       });
     });
+  },
+
+  // Pause current match
+  pauseMatch: () => {
+    gameStatus.set('paused');
+    // Save match to localStorage for persistence
+    saveMatchToLocalStorage();
+  },
+
+  // Resume paused match
+  resumeMatch: () => {
+    gameStatus.set('playing');
+  },
+
+  // Quit current match
+  quitMatch: () => {
+    gameStatus.set('finished');
+    // Clear localStorage
+    clearMatchFromLocalStorage();
+  },
+
+  // Set match format
+  setMatchFormat: (format: 'single' | 'bo3' | 'bo5' | 'bo7') => {
+    const requiredLegsMap = {
+      single: 1,
+      bo3: 2,
+      bo5: 3,
+      bo7: 4
+    };
+    
+    matchFormat.set({
+      legFormat: format,
+      homeLegsWon: 0,
+      awayLegsWon: 0,
+      requiredLegs: requiredLegsMap[format]
+    });
+  },
+
+  // Complete current leg
+  completeLeg: (winner: 'home' | 'away') => {
+    let matchCompleted = false;
+    
+    matchFormat.update(format => {
+      const newFormat = { ...format };
+      if (winner === 'home') {
+        newFormat.homeLegsWon++;
+      } else {
+        newFormat.awayLegsWon++;
+      }
+      
+      // Check if match is complete
+      if (newFormat.homeLegsWon >= newFormat.requiredLegs || newFormat.awayLegsWon >= newFormat.requiredLegs) {
+        matchCompleted = true;
+        gameState.update(state => ({ ...state, gameComplete: true, winner }));
+        gameStatus.set('finished');
+      }
+      
+      return newFormat;
+    });
+    
+    if (!matchCompleted) {
+      // Start next leg
+      gameState.update(state => ({
+        ...state,
+        currentLeg: state.currentLeg + 1,
+        homeScore: 501,
+        awayScore: 501,
+        dartsThrown: 0
+      }));
+      
+      // Reset leg start status
+      legStartStatus.set({
+        homeStarted: false,
+        awayStarted: false
+      });
+      
+      // Clear current turn
+      currentTurnDarts.set([]);
+    }
+  },
+
+  // Get required legs for current format
+  getRequiredLegs: (): Promise<number> => {
+    return new Promise(resolve => {
+      const unsubscribe = matchFormat.subscribe(format => {
+        resolve(format.requiredLegs);
+        unsubscribe();
+      });
+    });
   }
 };
+
+// Helper functions for localStorage
+function saveMatchToLocalStorage() {
+  // Implementation would save current game state to localStorage
+  // For now, this is a placeholder
+}
+
+function clearMatchFromLocalStorage() {
+  // Implementation would clear match data from localStorage
+  // For now, this is a placeholder
+}
 
 // Utility derived stores for UI components
 export const homeScoreDisplay: Readable<string> = derived(
