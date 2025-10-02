@@ -132,24 +132,51 @@ export class PlayersService {
    */
   static async createPlayer(name: string): Promise<ApiResponse<Player>> {
     try {
+      if (!name || name.trim().length === 0) {
+        throw new Error('Player name is required');
+      }
+
+      const playerData = {
+        name: name.trim(),
+        weeks_attended: 0,
+        games_played: 0,
+        games_won: 0,
+        games_lost: 0,
+        win_percentage: 0,
+        total_darts: 0,
+        total_180s: 0,
+        highest_checkout: 0,
+        checkout_attempts: 0,
+        checkout_hits: 0,
+        consecutive_losses: 0,
+        last_result: null,
+        drop_week: null
+      };
+
       const { data, error } = await supabase
         .from('players')
-        .insert([{ name }])
+        .insert([playerData])
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Create player error:', error);
+        throw error;
+      }
 
-      return { 
-        data, 
-        error: null, 
-        loading: false 
+      console.log('✅ Player created successfully:', data);
+
+      return {
+        data,
+        error: null,
+        loading: false
       };
     } catch (err) {
-      return { 
-        data: null, 
-        error: handleDatabaseError(err), 
-        loading: false 
+      console.error('createPlayer error:', err);
+      return {
+        data: null,
+        error: handleDatabaseError(err),
+        loading: false
       };
     }
   }

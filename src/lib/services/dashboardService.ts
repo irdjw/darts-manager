@@ -367,12 +367,18 @@ async getCurrentWeek(): Promise<number> {
     return {
       id: '',
       name,
+      weeks_attended: 0,
       games_played: 0,
       games_won: 0,
       games_lost: 0,
+      last_game_week: null,
+      created_at: new Date().toISOString(),
+      total_darts: 0,
       total_180s: 0,
       win_percentage: 0,
       highest_checkout: 0,
+      checkout_attempts: 0,
+      checkout_hits: 0,
       last_result: null,
       consecutive_losses: 0,
       drop_week: null
@@ -605,48 +611,36 @@ async getCurrentWeek(): Promise<number> {
   async saveGameAssignment(fixtureId: string, gameNumber: number, playerId: string): Promise<void> {
     try {
       await retryDatabaseOperation(async () => {
-        // Get the fixture to obtain the opposition team name
-        const { data: fixture, error: fixtureError } = await supabase
+        const { data: fixture } = await supabase
           .from('fixtures')
           .select('opposition')
           .eq('id', fixtureId)
           .single();
 
-        if (fixtureError) {
-          console.error('Error fetching fixture for opponent name:', fixtureError);
-          throw fixtureError;
-        }
-
-        // Format opponent name as "[Team Name] Player [Game Number]"
-        const opponentName = fixture?.opposition 
+        const opponentName = fixture?.opposition
           ? `${fixture.opposition} Player ${gameNumber}`
           : `Opposition Player ${gameNumber}`;
 
-        // First check if the assignment already exists
         const { data: existingGame } = await supabase
           .from('league_games')
-          .select('id, result')
+          .select('id')
           .eq('fixture_id', fixtureId)
           .eq('game_number', gameNumber)
-          .single();
+          .maybeSingle();
 
         if (existingGame) {
-          // Update only the player assignment, preserve existing result
           const { error } = await supabase
             .from('league_games')
             .update({
               our_player_id: playerId,
-              opponent_name: opponentName
+              opponent_name: opponentName,
+              updated_at: new Date().toISOString()
             })
-            .eq('fixture_id', fixtureId)
-            .eq('game_number', gameNumber);
+            .eq('id', existingGame.id);
 
-          if (error) {
-            console.error('Error updating game assignment:', error);
-            throw error;
-          }
+          if (error) throw error;
+          console.log('✅ Game assignment updated:', gameNumber);
         } else {
-          // Create new assignment with temporary result that satisfies schema
           const { error } = await supabase
             .from('league_games')
             .insert({
@@ -654,13 +648,14 @@ async getCurrentWeek(): Promise<number> {
               game_number: gameNumber,
               our_player_id: playerId,
               opponent_name: opponentName,
-              result: 'loss' // Temporary result - will be updated when game is completed
+              result: null,
+              our_score: 0,
+              opposition_score: 0,
+              created_at: new Date().toISOString()
             });
 
-          if (error) {
-            console.error('Error saving game assignment:', error);
-            throw error;
-          }
+          if (error) throw error;
+          console.log('✅ Game assignment created:', gameNumber);
         }
       });
     } catch (err: any) {
