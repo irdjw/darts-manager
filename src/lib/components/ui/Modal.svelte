@@ -60,15 +60,15 @@
   ></div>
   
   <!-- Modal -->
-  <div 
-    class="fixed inset-0 z-50 overflow-y-auto p-4 flex items-center justify-center"
+  <div
+    class="modal-overlay"
     role="dialog"
     aria-modal="true"
     aria-labelledby={title ? 'modal-title' : undefined}
   >
-    <div 
+    <div
       bind:this={modalElement}
-      class="bg-white rounded-xl shadow-2xl w-full {sizeClasses} max-h-[90vh] overflow-hidden"
+      class="modal-content bg-white rounded-xl shadow-2xl w-full {sizeClasses}"
       transition:fly={{ y: 50, duration: 300 }}
       tabindex="-1"
       on:click|stopPropagation
@@ -106,7 +106,37 @@
 {/if}
 
 <style>
-  /* Prevent body scroll when modal is open */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+
+  .modal-content {
+    position: relative;
+    z-index: 9999;
+    max-width: min(90vw, 600px);
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+  }
+
+  @media screen and (max-width: 768px) {
+    .modal-overlay {
+      padding: 8px;
+    }
+
+    .modal-content {
+      max-width: calc(100vw - 16px);
+      max-height: calc(100vh - 16px);
+    }
+  }
+
   :global(body.modal-open) {
     overflow: hidden;
   }
