@@ -6,6 +6,7 @@
   import DartVisualIndicators from './DartVisualIndicators.svelte';
   import LiveDartStats from './LiveDartStats.svelte';
   import CheckoutSuggestions from './CheckoutSuggestions.svelte';
+  import GameCompleteModal from './GameCompleteModal.svelte';
   import { 
     gameState, 
     gameStatus,
@@ -111,7 +112,17 @@
     if (gameId) {
       initializeGame();
     }
-    
+
+    // Set viewport height for mobile
+    const setVH = () => {
+      const vh = window.innerHeight * 0.01;
+      document.documentElement.style.setProperty('--vh', `${vh}px`);
+    };
+
+    window.addEventListener('resize', setVH);
+    window.addEventListener('orientationchange', setVH);
+    setVH();
+
     // Subscribe to stores
     const unsubscribers = [
       gameState.subscribe(value => currentGameState = value),
@@ -132,7 +143,11 @@
       matchFormat.subscribe(value => matchFormatValue = value)
     ];
 
-    return () => unsubscribers.forEach(unsub => unsub());
+    return () => {
+      window.removeEventListener('resize', setVH);
+      window.removeEventListener('orientationchange', setVH);
+      unsubscribers.forEach(unsub => unsub());
+    };
   });
 
   // Initialize the game
@@ -552,6 +567,58 @@
     }
   }
 
+  // Game Complete Modal handlers
+  function handleSaveAndExit() {
+    // Navigate to match page or home
+    if (gameId) {
+      goto(`/custom-match/${gameId}`);
+    } else {
+      goto('/custom-match');
+    }
+  }
+
+  function handlePlayAgain() {
+    // Reload the page to start a new game
+    window.location.reload();
+  }
+
+  function handleModalClose() {
+    // Allow closing modal but stay on page
+  }
+
+  // Create mock stats for modal (using current leg stats)
+  $: homeStats = {
+    playerName: homePlayerName,
+    playerId: homePlayerId,
+    average: statsValue?.average || 0,
+    totalDarts: statsValue?.totalDarts || 0,
+    scores180: statsValue?.scores180 || 0,
+    scores140Plus: statsValue?.scores140Plus || 0,
+    scores100Plus: statsValue?.scores100Plus || 0,
+    checkoutPercentage: statsValue?.checkoutPercentage || 0,
+    scores80Plus: 0,
+    scores60Plus: 0,
+    checkoutAttempts: 0,
+    checkoutHits: 0,
+    highestCheckout: 0
+  };
+
+  $: awayStats = {
+    playerName: awayPlayerName,
+    playerId: awayPlayerId,
+    average: 0,
+    totalDarts: 0,
+    scores180: 0,
+    scores140Plus: 0,
+    scores100Plus: 0,
+    checkoutPercentage: 0,
+    scores80Plus: 0,
+    scores60Plus: 0,
+    checkoutAttempts: 0,
+    checkoutHits: 0,
+    highestCheckout: 0
+  };
+
   // Handle mobile viewport height changes
   let innerHeight = 0;
 
@@ -823,58 +890,29 @@
 
 <!-- Game Complete Modal -->
 {#if currentGameState?.gameComplete}
-  <div class="fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50">
-    <div class="bg-gray-900 rounded-2xl p-6 max-w-sm w-full text-center">
-      <div class="text-6xl mb-4">🎯</div>
-      <h2 class="text-2xl font-bold text-green-400 mb-2">Game Complete!</h2>
-      <p class="text-white text-lg mb-4">
-        {currentGameState.winner === 'home' ? homePlayerName : awayPlayerName} Wins!
-      </p>
-      
-      <div class="grid grid-cols-2 gap-4 mb-6">
-        <div class="bg-gray-800 rounded-lg p-3">
-          <p class="text-gray-400 text-sm">{homePlayerName}</p>
-          <p class="text-2xl font-bold {currentGameState.winner === 'home' ? 'text-green-400' : 'text-white'}">
-            {currentGameState.homeScore}
-          </p>
-        </div>
-        <div class="bg-gray-800 rounded-lg p-3">
-          <p class="text-gray-400 text-sm">{awayPlayerName}</p>
-          <p class="text-2xl font-bold {currentGameState.winner === 'away' ? 'text-green-400' : 'text-white'}">
-            {currentGameState.awayScore}
-          </p>
-        </div>
-      </div>
-
-      <button 
-        on:click={() => window.location.reload()}
-        class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-6 rounded-xl transition-all"
-      >
-        New Game
-      </button>
-    </div>
-  </div>
+  <GameCompleteModal
+    winner={currentGameState.winner || 'home'}
+    {homeStats}
+    {awayStats}
+    homeLegsWon={matchFormatValue.homeLegsWon}
+    awayLegsWon={matchFormatValue.awayLegsWon}
+    on:saveAndExit={handleSaveAndExit}
+    on:playAgain={handlePlayAgain}
+    on:close={handleModalClose}
+  />
 {/if}
 
 <style>
-  /* Main container - fixed viewport handling */
+  /* Main container - NO SCROLL layout */
   .dart-scoring-app {
-    width: 100%;
-    height: var(--viewport-height);
-    height: calc(var(--vh, 1vh) * 100);
-    max-height: var(--viewport-height);
-    max-height: calc(var(--vh, 1vh) * 100);
     display: flex;
     flex-direction: column;
-    overflow: hidden;
-    position: relative;
+    height: calc(var(--vh, 1vh) * 100);
+    max-height: calc(var(--vh, 1vh) * 100);
+    width: 100%;
+    overflow: hidden; /* CRITICAL - NO SCROLLING */
     background: #1f2937;
-    
-    /* Safe area support for devices with notches */
-    padding-top: var(--safe-area-inset-top);
-    padding-bottom: var(--safe-area-inset-bottom);
-    padding-left: var(--safe-area-inset-left);
-    padding-right: var(--safe-area-inset-right);
+    position: relative;
   }
   
   /* Prevent unwanted interactions */
