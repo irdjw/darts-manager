@@ -30,7 +30,7 @@ function createPlayersStore() {
         update(state => ({
           ...state,
           loading: false,
-          error: response.error?.message || 'Failed to load players'
+          error: response.error || 'Failed to load players'
         }));
       } else {
         update(state => ({

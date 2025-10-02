@@ -1,3 +1,5 @@
+import type { Player } from '$lib/database/types';
+
 export interface Fixture {
   id: string;
   week_number: number;
@@ -9,8 +11,7 @@ export interface Fixture {
   team_won?: boolean;
 }
 
-// Re-export Player from database types for consistency
-export type { Player } from '$lib/database/types';
+export type { Player };
 
 export interface AttendanceRecord {
   id: string;
