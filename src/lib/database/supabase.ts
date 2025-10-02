@@ -17,43 +17,47 @@ export const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_K
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    flowType: 'pkce'
+    flowType: 'pkce',
+    storage: browser ? window.localStorage : undefined,
+    storageKey: 'isaac-wilson-darts-auth'
   },
   db: {
     schema: 'public'
   },
   global: {
     headers: {
-      'X-Client-Info': 'darts-manager@2.0.0'
+      'X-Client-Info': 'darts-manager@2.0.0',
+      'Content-Type': 'application/json'
+    }
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 10
     }
   }
 });
 
 // Only test connection in browser environment
 if (browser) {
-  let connectionRetries = 0;
-  const maxRetries = 3;
-
-  const testConnection = async () => {
-    try {
-      const { error } = await supabase.from('players').select('count').limit(1);
-      if (error) {
-        throw error;
-      }
-      console.log('Supabase connected successfully');
-    } catch (error) {
-      connectionRetries++;
-      console.error(`Supabase connection failed (attempt ${connectionRetries}/${maxRetries}):`, error);
-      
-      if (connectionRetries < maxRetries) {
-        setTimeout(testConnection, 1000 * connectionRetries); // Exponential backoff
-      } else {
-        console.error('Supabase connection failed after maximum retries');
-      }
-    }
-  };
-
   testConnection();
+}
+
+async function testConnection() {
+  try {
+    const { data, error } = await supabase
+      .from('players')
+      .select('id')
+      .limit(1);
+
+    if (error) {
+      console.error('Supabase connection error:', error);
+      return;
+    }
+
+    console.log('✅ Supabase connected successfully');
+  } catch (error) {
+    console.error('❌ Supabase connection failed:', error);
+  }
 }
 
 export function handleDatabaseError(error: any): string {
