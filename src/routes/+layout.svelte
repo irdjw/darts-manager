@@ -1,100 +1,31 @@
 <script lang="ts">
-  import '../app.css';
   import { onMount } from 'svelte';
-  import { invalidate } from '$app/navigation';
   import { page } from '$app/stores';
-  import { browser } from '$app/environment';
-  import { getSupabaseBrowserClient } from '$lib/utils/supabase-browser';
+  import { goto } from '$app/navigation';
+  import '../app.css';
   import MobileNavigation from '$lib/components/MobileNavigation.svelte';
-  import KeyboardHelp from '$lib/components/KeyboardHelp.svelte';
-  import ErrorBoundary from '$lib/components/ErrorBoundary.svelte';
-  import { registerServiceWorker, setupInstallPrompt, setupOfflineSync, onNetworkChange } from '$lib/utils/pwa';
-  import { initPerformanceMonitoring } from '$lib/utils/performance';
-  
+
   export let data;
-  
-  let supabase: any;
+
+  $: isAuthenticated = !!data.session;
+  $: isAuthPage = $page.url.pathname === '/auth' || $page.url.pathname === '/login';
+
   let mobileMenuOpen = false;
   let isOnline = true;
-  let showInstallPrompt = false;
-  let showUpdateNotification = false;
-  
-  $: isAuthenticated = !!data?.session?.user;
-  $: isAuthPage = $page.route.id === '/auth' || $page.route.id === '/';
-  
-  // Initialize Supabase client-side
+
   onMount(() => {
-    if (!browser) return;
-    
-    try {
-      supabase = getSupabaseBrowserClient();
-    } catch (error) {
-      console.error('Failed to initialize Supabase client:', error);
-      return;
-    }
+    if (typeof window !== 'undefined') {
+      isOnline = navigator.onLine;
 
-    // Handle auth state changes
-    let subscription: any = null;
-    if (supabase && supabase.auth) {
-      const authListener = supabase.auth.onAuthStateChange((event, session) => {
-        console.log('Auth state changed:', event);
-        
-        if (session?.expires_at !== data.session?.expires_at) {
-          // Invalidate data when auth state changes
-          invalidate('supabase:auth');
-        }
+      window.addEventListener('online', () => {
+        isOnline = true;
       });
-      subscription = authListener.data?.subscription || authListener;
+
+      window.addEventListener('offline', () => {
+        isOnline = false;
+      });
     }
-
-    // Setup PWA features
-    setupPWA();
-    
-    // Initialize performance monitoring
-    initPerformanceMonitoring();
-    
-    return () => {
-      if (subscription && typeof subscription.unsubscribe === 'function') {
-        subscription.unsubscribe();
-      }
-    };
   });
-
-  async function setupPWA() {
-    // Register service worker
-    await registerServiceWorker();
-    
-    // Setup install prompt
-    setupInstallPrompt();
-    
-    // Setup offline sync
-    setupOfflineSync();
-    
-    // Monitor network status
-    const cleanup = onNetworkChange((online) => {
-      isOnline = online;
-      if (!online) {
-        console.log('App went offline');
-      } else {
-        console.log('App came back online');
-      }
-    });
-    
-    // PWA event listeners
-    window.addEventListener('pwa-installable', () => {
-      showInstallPrompt = true;
-    });
-    
-    window.addEventListener('pwa-installed', () => {
-      showInstallPrompt = false;
-    });
-    
-    window.addEventListener('pwa-update-available', () => {
-      showUpdateNotification = true;
-    });
-    
-    return cleanup;
-  }
 
   function toggleMobileMenu() {
     mobileMenuOpen = !mobileMenuOpen;
@@ -105,137 +36,103 @@
   }
 </script>
 
-<div class="min-h-screen">
-  <!-- Mobile Navigation -->
+<div class="app-container">
   {#if isAuthenticated && !isAuthPage}
-    <MobileNavigation 
-      isOpen={mobileMenuOpen} 
+    <MobileNavigation
+      isOpen={mobileMenuOpen}
       on:close={closeMobileMenu}
     />
-  {/if}
-  
-  <!-- Main App Header (only for authenticated users, not on auth pages) -->
-  {#if isAuthenticated && !isAuthPage}
-    <header class="bg-white shadow-sm border-b border-gray-200 px-4 py-4 lg:hidden">
-      <div class="flex items-center justify-between">
+
+    <header class="app-header">
+      <div class="flex items-center justify-between h-full px-4">
         <div class="flex items-center space-x-3">
           <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
             <span class="text-white text-sm font-bold">IW</span>
           </div>
           <div>
-            <h1 class="text-lg font-bold text-gray-900">Isaac Wilson</h1>
-            <p class="text-sm text-gray-500">Darts Team</p>
+            <h1 class="text-base font-bold text-gray-900">Isaac Wilson</h1>
+            <p class="text-xs text-gray-500">Darts Team</p>
           </div>
         </div>
-        
-        <div class="flex items-center space-x-2">
-          <!-- Quick logout link for mobile -->
-          <a
-            href="/logout"
-            class="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 
-                   transition-colors lg:hidden"
-            aria-label="Sign out"
-          >
-            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                    d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-          </a>
-          
-          <!-- Mobile menu button -->
-          <button
-            type="button"
-            class="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 
-                   transition-colors lg:hidden"
-            on:click={toggleMobileMenu}
-            aria-label="Open menu"
-          >
-            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                    d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-        </div>
-      </div>
-    </header>
-  {/if}
-  
-  <!-- Main Content -->
-  <ErrorBoundary>
-    <main class="flex-1" id="main-content">
-      <slot />
-    </main>
-  </ErrorBoundary>
-  
-  <!-- Global Components -->
-  <KeyboardHelp />
-  
-  <!-- Network Status Indicator -->
-  {#if !isOnline}
-    <div class="fixed bottom-4 left-4 right-4 bg-orange-100 border border-orange-200 rounded-lg p-3 z-40">
-      <div class="flex items-center space-x-2">
-        <svg class="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                d="M18.364 5.636l-12.728 12.728m0-12.728l12.728 12.728" />
-        </svg>
-        <span class="text-orange-800 text-sm font-medium">You're offline</span>
-        <span class="text-orange-600 text-xs">Some features may be limited</span>
-      </div>
-    </div>
-  {/if}
-  
-  <!-- PWA Install Prompt -->
-  {#if showInstallPrompt}
-    <div class="fixed bottom-4 left-4 right-4 bg-blue-100 border border-blue-200 rounded-lg p-3 z-40">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center space-x-2">
-          <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                  d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-          </svg>
-          <span class="text-blue-800 text-sm font-medium">Install app for better experience</span>
-        </div>
+
         <button
-          on:click={() => showInstallPrompt = false}
-          class="text-blue-600 hover:text-blue-700 p-1"
-          aria-label="Dismiss install prompt"
+          on:click={toggleMobileMenu}
+          class="p-2 text-gray-500 hover:text-gray-700"
+          aria-label="Menu"
         >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
           </svg>
         </button>
       </div>
+    </header>
+  {/if}
+
+  <main class="app-main">
+    <slot />
+  </main>
+
+  {#if !isOnline}
+    <div class="offline-indicator">
+      <svg class="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 15.5c-.77.833.192 2.5 1.732 2.5z" />
+      </svg>
+      <span class="text-sm text-orange-800">You're offline. Changes will sync when you reconnect.</span>
     </div>
   {/if}
 </div>
 
 <style>
-  /* Layout viewport fix */
-  .min-h-screen {
-    min-height: var(--viewport-height);
-    min-height: calc(var(--vh, 1vh) * 100);
-    display: flex;
-    flex-direction: column;
-  }
-  
-  /* Remove conflicting overflow rules */
-  :global(html),
   :global(body) {
-    overflow-x: hidden;
-    overflow-y: hidden;
-  }
-  
-  /* Mobile header adjustments */
-  header {
-    flex-shrink: 0;
-    min-height: 44px;
-  }
-  
-  /* Main content area */
-  main {
-    flex: 1;
+    margin: 0;
+    padding: 0;
     overflow: hidden;
+  }
+
+  .app-container {
+    width: 100vw;
+    height: var(--viewport-height, 100vh);
+    height: calc(var(--vh, 1vh) * 100);
     display: flex;
     flex-direction: column;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .app-header {
+    flex-shrink: 0;
+    height: 60px;
+    background: white;
+    border-bottom: 1px solid #e5e7eb;
+    z-index: 10;
+  }
+
+  .app-main {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    position: relative;
+  }
+
+  .offline-indicator {
+    position: fixed;
+    bottom: 16px;
+    left: 16px;
+    right: 16px;
+    background: #fed7aa;
+    border: 1px solid #fdba74;
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 50;
+  }
+
+  @media screen and (min-width: 768px) {
+    .app-header {
+      height: 64px;
+    }
   }
 </style>
