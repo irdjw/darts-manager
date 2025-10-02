@@ -3,9 +3,6 @@
   import { onMount, createEventDispatcher } from 'svelte';
   import { goto } from '$app/navigation';
   import NumberGrid from './NumberGrid.svelte';
-  import DartVisualIndicators from './DartVisualIndicators.svelte';
-  import LiveDartStats from './LiveDartStats.svelte';
-  import CheckoutSuggestions from './CheckoutSuggestions.svelte';
   import GameCompleteModal from './GameCompleteModal.svelte';
   import { 
     gameState, 
@@ -60,7 +57,6 @@
   let matchFormatValue: any = { legFormat: 'single', homeLegsWon: 0, awayLegsWon: 0, requiredLegs: 1 };
 
   // UI state
-  let showStats: boolean = false;
   let gameInitialized: boolean = false;
   let lastDartAnimation: number | null = null;
   let errorMessage: string | null = null;
@@ -127,10 +123,7 @@
     const unsubscribers = [
       gameState.subscribe(value => currentGameState = value),
       currentTurnDarts.subscribe(value => currentTurnDartsValue = value),
-      currentScore.subscribe(value => {
-        currentScoreValue = value;
-        updateCheckoutSuggestions();
-      }),
+      currentScore.subscribe(value => currentScoreValue = value),
       currentDartsRemaining.subscribe(value => dartsRemainingValue = value),
       currentTurnTotal.subscribe(value => currentTurnTotalValue = value),
       currentLegStats.subscribe(value => statsValue = value),
@@ -487,14 +480,6 @@
     });
   }
 
-  // Update checkout suggestions
-  function updateCheckoutSuggestions() {
-    if (currentScoreValue && dartsRemainingValue) {
-      const routes = checkoutService.getRecommendedFinishes(currentScoreValue, dartsRemainingValue);
-      scoringActions.setCheckoutRoutes(routes);
-    }
-  }
-
   // Undo last dart
   function undoLastDart() {
     scoringActions.undoLastDart();
@@ -511,11 +496,6 @@
   function clearCurrentTurn() {
     scoringActions.clearCurrentTurn();
     triggerHaptic();
-  }
-
-  // Toggle stats display
-  function toggleStats() {
-    showStats = !showStats;
   }
 
   // Pause match
@@ -783,60 +763,19 @@
   <div class="flex-1 overflow-y-auto"
        style="min-height: 0; overscroll-behavior: none;"
   >
-    <!-- Dart Visual Indicators -->
-    <div class="p-4">
-      <DartVisualIndicators 
-        currentTurnDarts={currentTurnDartsValue}
-        dartsRemaining={dartsRemainingValue}
-        currentTurnTotal={currentTurnTotalValue}
-        showTurnTotal={true}
-      />
-    </div>
+    <!-- Dart Visual Indicators: Removed during gameplay for cleaner interface.
+         Visual dart indicators are not shown during active gameplay to reduce clutter.
+         All game statistics are displayed in the GameCompleteModal at game end. -->
 
-    <!-- Stats Toggle -->
-    <div class="px-4 mb-4">
-      <button
-        on:click={toggleStats}
-        class="w-full bg-gray-100 hover:bg-gray-200 rounded-lg p-3 
-               flex items-center justify-between transition-all min-h-[60px]"
-        style="touch-action: manipulation;"
-      >
-        <span class="text-gray-900 font-medium">
-          {showStats ? 'Hide' : 'Show'} Statistics
-        </span>
-        <span class="text-gray-600 text-2xl {showStats ? 'rotate-180' : ''} transition-transform">
-          ▼
-        </span>
-      </button>
-    </div>
+    <!-- LiveDartStats: Removed during gameplay for cleaner interface.
+         Statistics are not shown during active gameplay to reduce clutter and improve focus.
+         All game statistics including averages, high scores, and checkout percentages
+         are displayed in the GameCompleteModal at game end. -->
 
-    <!-- Statistics (Collapsible) -->
-    {#if showStats}
-      <div class="px-4 mb-4">
-        <LiveDartStats
-          currentLegStats={statsValue}
-          currentTurnDarts={currentTurnDartsValue}
-          currentScore={currentScoreValue}
-          startingScore={startingScore}
-          playerName={currentPlayer}
-          isCurrentThrower={isCurrentPlayerThrowing}
-          showDetailed={true}
-        />
-      </div>
-    {/if}
-
-    <!-- Checkout Suggestions -->
-    {#if showCheckoutsValue && checkoutService.isCheckoutOpportunity(currentScoreValue)}
-      <div class="px-4 mb-4">
-        <CheckoutSuggestions
-          currentScore={currentScoreValue}
-          dartsRemaining={dartsRemainingValue}
-          checkoutRoutes={checkoutRoutesValue}
-          isVisible={true}
-          onDismiss={() => scoringActions.toggleCheckouts()}
-        />
-      </div>
-    {/if}
+    <!-- CheckoutSuggestions: Removed during gameplay for cleaner interface.
+         Checkout suggestions are not shown during active gameplay to reduce clutter.
+         Players should focus on their throwing strategy without on-screen distractions.
+         All game statistics are displayed in the GameCompleteModal at game end. -->
 
     <!-- Number Grid -->
     <div class="px-4">

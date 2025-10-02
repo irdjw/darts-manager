@@ -9,6 +9,26 @@ import type {
   CheckoutRoute 
 } from '../types/scoring';
 
+// Interface for comprehensive undo/redo history
+export interface DartHistoryItem {
+  dart: DartThrow;
+  gameState: {
+    homeScore: number;
+    awayScore: number;
+    currentThrower: 'home' | 'away';
+    dartsThrown: number;
+  };
+  turnState: {
+    turnDarts: DartThrow[];
+    turnTotal: number;
+  };
+  legStartStatus: {
+    homeStarted: boolean;
+    awayStarted: boolean;
+  };
+  timestamp: number;
+}
+
 // Game state store
 export const gameState = writable<GameState>({
   gameId: '',
@@ -49,15 +69,15 @@ export const legStartStatus = writable<{
 // Current scoring mode
 export const scoringMode = writable<ScoringMode['type']>('dart-by-dart');
 
-// All dart throws in the current game
+// All dart throws in the current game (for statistics tracking)
 export const dartHistory = writable<DartThrow[]>([]);
 
 // Current turn's darts (for dart-by-dart mode)
 export const currentTurnDarts = writable<DartThrow[]>([]);
 
-// Undo/Redo functionality
-export const undoStack = writable<DartThrow[][]>([]);
-export const redoStack = writable<DartThrow[][]>([]);
+// Comprehensive undo/redo functionality with full state preservation
+export const dartHistoryStack = writable<DartHistoryItem[]>([]);
+export const redoStack = writable<DartHistoryItem[]>([]);
 
 // Turn total input (for turn-total mode)
 export const turnTotalInput = writable<string>('');
@@ -131,8 +151,8 @@ export const dartsRemaining: Readable<number> = derived(
 );
 
 export const canUndo: Readable<boolean> = derived(
-  [currentTurnDarts],
-  ([$currentTurnDarts]) => $currentTurnDarts.length > 0
+  [dartHistoryStack],
+  ([$dartHistoryStack]) => $dartHistoryStack.length > 0
 );
 
 export const canRedo: Readable<boolean> = derived(
@@ -198,9 +218,18 @@ export const scoringActions = {
     
     dartHistory.set([]);
     currentTurnDarts.set([]);
+    dartHistoryStack.set([]);
+    redoStack.set([]);
     legHistory.set([]);
     gameStats.set([]);
-    enhancedStats.set({ checkoutAttempts: 0, checkoutHits: 0, highestCheckout: 0 });
+    enhancedStats.set({ 
+      checkoutAttempts: 0, 
+      checkoutHits: 0, 
+      highestCheckout: 0,
+      gameStartTime: null,
+      lastDartTime: null,
+      totalGameTime: 0
+    });
   },
 
   // Switch scoring mode
@@ -214,29 +243,60 @@ export const scoringActions = {
 
   // Add a dart to current turn (dart-by-dart mode)
   addDartToCurrentTurn: (score: number, isDouble: boolean = false, isCheckoutAttempt: boolean = false, checkoutSuccessful: boolean = false) => {
-    currentTurnDarts.update(darts => {
-      if (darts.length >= 3) return darts; // Max 3 darts per turn
-      
-      // Save current state to undo stack before adding new dart
-      undoStack.update(stack => [...stack, [...darts]]);
-      // Clear redo stack when new action is performed
-      redoStack.set([]);
-      
-      const newDart: DartThrow = {
-        id: crypto.randomUUID(),
-        legNumber: 0, // Will be set when turn is completed
-        turnNumber: 0, // Will be set when turn is completed
-        dartNumber: darts.length + 1,
-        dartScore: score,
-        runningScore: 0, // Will be calculated when turn is completed
-        isDoubleAttempt: isDouble,
-        isCheckoutAttempt,
-        checkoutSuccessful,
-        timestamp: new Date()
-      };
-      
-      return [...darts, newDart];
-    });
+    let currentState!: GameState;
+    let currentLegStart!: { homeStarted: boolean; awayStarted: boolean };
+    let currentDarts!: DartThrow[];
+    let currentTotal: number = 0;
+    
+    // Get current state synchronously
+    gameState.subscribe(s => currentState = s)();
+    legStartStatus.subscribe(l => currentLegStart = l)();
+    currentTurnDarts.subscribe(d => {
+      currentDarts = d;
+      currentTotal = d.reduce((sum, dart) => sum + dart.dartScore, 0);
+    })();
+    
+    if (currentDarts.length >= 3) return; // Max 3 darts per turn
+    
+    const newDart: DartThrow = {
+      id: crypto.randomUUID(),
+      legNumber: 0, // Will be set when turn is completed
+      turnNumber: 0, // Will be set when turn is completed
+      dartNumber: currentDarts.length + 1,
+      dartScore: score,
+      runningScore: 0, // Will be calculated when turn is completed
+      isDoubleAttempt: isDouble,
+      isCheckoutAttempt,
+      checkoutSuccessful,
+      timestamp: new Date()
+    };
+    
+    // Save complete state to history before adding dart
+    const historyItem: DartHistoryItem = {
+      dart: newDart,
+      gameState: {
+        homeScore: currentState.homeScore,
+        awayScore: currentState.awayScore,
+        currentThrower: currentState.currentThrower,
+        dartsThrown: currentState.dartsThrown
+      },
+      turnState: {
+        turnDarts: [...currentDarts],
+        turnTotal: currentTotal
+      },
+      legStartStatus: {
+        homeStarted: currentLegStart.homeStarted,
+        awayStarted: currentLegStart.awayStarted
+      },
+      timestamp: Date.now()
+    };
+    
+    dartHistoryStack.update(stack => [...stack, historyItem]);
+    // Clear redo stack when new action is performed
+    redoStack.set([]);
+    
+    // Add the new dart
+    currentTurnDarts.update(darts => [...darts, newDart]);
   },
 
   // Complete current turn
@@ -268,45 +328,70 @@ export const scoringActions = {
     checkoutRoutes.set(routes);
   },
 
-  // Undo last dart
+  // Undo last dart - restores complete game state
   undoLastDart: () => {
-    let lastState: DartThrow[] | undefined;
-    undoStack.update(stack => {
-      lastState = stack.pop();
-      return stack;
+    let undoneItem: DartHistoryItem | undefined;
+    
+    dartHistoryStack.update(stack => {
+      if (stack.length === 0) return stack;
+      undoneItem = stack[stack.length - 1];
+      return stack.slice(0, -1);
     });
     
-    if (lastState !== undefined) {
-      // Save current state to redo stack
-      redoStack.update(stack => {
-        currentTurnDarts.subscribe(current => {
-          stack.push([...current]);
-        })();
-        return stack;
+    if (undoneItem) {
+      // Save to redo stack
+      redoStack.update(stack => [...stack, undoneItem!]);
+      
+      // Restore the state BEFORE the dart was thrown
+      gameState.update(state => ({
+        ...state,
+        homeScore: undoneItem!.gameState.homeScore,
+        awayScore: undoneItem!.gameState.awayScore,
+        currentThrower: undoneItem!.gameState.currentThrower,
+        dartsThrown: undoneItem!.gameState.dartsThrown
+      }));
+      
+      currentTurnDarts.set(undoneItem.turnState.turnDarts);
+      
+      legStartStatus.set({
+        homeStarted: undoneItem.legStartStatus.homeStarted,
+        awayStarted: undoneItem.legStartStatus.awayStarted
       });
-      // Restore previous state
-      currentTurnDarts.set(lastState);
     }
   },
 
-  // Redo last undone dart
+  // Redo last undone dart - restores complete game state
   redoLastDart: () => {
-    let nextState: DartThrow[] | undefined;
+    let redoneItem: DartHistoryItem | undefined;
+    
     redoStack.update(stack => {
-      nextState = stack.pop();
-      return stack;
+      if (stack.length === 0) return stack;
+      redoneItem = stack[stack.length - 1];
+      return stack.slice(0, -1);
     });
     
-    if (nextState !== undefined) {
-      // Save current state to undo stack
-      undoStack.update(stack => {
-        currentTurnDarts.subscribe(current => {
-          stack.push([...current]);
-        })();
-        return stack;
-      });
-      // Restore next state
-      currentTurnDarts.set(nextState);
+    if (redoneItem) {
+      // Save back to history stack
+      dartHistoryStack.update(stack => [...stack, redoneItem!]);
+      
+      // Restore the state AFTER the dart was thrown
+      const newDarts = [...redoneItem.turnState.turnDarts, redoneItem.dart];
+      currentTurnDarts.set(newDarts);
+      
+      // Calculate the new score after re-adding the dart
+      const dartScore = redoneItem.dart.dartScore;
+      const currentThrower = redoneItem.gameState.currentThrower;
+      const newScore = (currentThrower === 'home' 
+        ? redoneItem.gameState.homeScore 
+        : redoneItem.gameState.awayScore) - dartScore;
+      
+      gameState.update(state => ({
+        ...state,
+        ...(currentThrower === 'home' 
+          ? { homeScore: newScore }
+          : { awayScore: newScore }
+        )
+      }));
     }
   },
 
@@ -368,6 +453,8 @@ export const scoringActions = {
     
     dartHistory.set([]);
     currentTurnDarts.set([]);
+    dartHistoryStack.set([]);
+    redoStack.set([]);
     legHistory.set([]);
     gameStats.set([]);
     
