@@ -9,6 +9,7 @@ export interface DartThrow {
   isCheckoutAttempt: boolean;
   checkoutSuccessful: boolean;
   timestamp: Date;
+  playerId?: string;
 }
 
 export interface TurnData {
@@ -31,6 +32,7 @@ export interface LegData {
   totalDarts: number;
   turns: TurnData[];
   duration?: number; // in seconds
+  darts?: number;
 }
 
 export interface GameState {

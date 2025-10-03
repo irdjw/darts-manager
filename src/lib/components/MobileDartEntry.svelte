@@ -3,9 +3,6 @@
   import { onMount, createEventDispatcher } from 'svelte';
   import { goto } from '$app/navigation';
   import NumberGrid from './NumberGrid.svelte';
-  import DartVisualIndicators from './DartVisualIndicators.svelte';
-  import LiveDartStats from './LiveDartStats.svelte';
-  import CheckoutSuggestions from './CheckoutSuggestions.svelte';
   import GameCompleteModal from './GameCompleteModal.svelte';
   import { 
     gameState, 
@@ -269,11 +266,11 @@
       }
     }
 
-    // Add dart to current turn
+    // Add dart to history and current turn with full snapshot
     scoringActions.addDartToCurrentTurn(
-      dartScore, 
-      isDouble, 
-      wasCheckoutOpportunity, 
+      dartScore,
+      isDouble,
+      wasCheckoutOpportunity,
       isValidFinish
     );
 
@@ -783,60 +780,12 @@
   <div class="flex-1 overflow-y-auto"
        style="min-height: 0; overscroll-behavior: none;"
   >
-    <!-- Dart Visual Indicators -->
-    <div class="p-4">
-      <DartVisualIndicators 
-        currentTurnDarts={currentTurnDartsValue}
-        dartsRemaining={dartsRemainingValue}
-        currentTurnTotal={currentTurnTotalValue}
-        showTurnTotal={true}
-      />
-    </div>
+    <!-- DartVisualIndicators removed - simplified interface -->
 
-    <!-- Stats Toggle -->
-    <div class="px-4 mb-4">
-      <button
-        on:click={toggleStats}
-        class="w-full bg-gray-100 hover:bg-gray-200 rounded-lg p-3 
-               flex items-center justify-between transition-all min-h-[60px]"
-        style="touch-action: manipulation;"
-      >
-        <span class="text-gray-900 font-medium">
-          {showStats ? 'Hide' : 'Show'} Statistics
-        </span>
-        <span class="text-gray-600 text-2xl {showStats ? 'rotate-180' : ''} transition-transform">
-          ▼
-        </span>
-      </button>
-    </div>
 
-    <!-- Statistics (Collapsible) -->
-    {#if showStats}
-      <div class="px-4 mb-4">
-        <LiveDartStats
-          currentLegStats={statsValue}
-          currentTurnDarts={currentTurnDartsValue}
-          currentScore={currentScoreValue}
-          startingScore={startingScore}
-          playerName={currentPlayer}
-          isCurrentThrower={isCurrentPlayerThrowing}
-          showDetailed={true}
-        />
-      </div>
-    {/if}
+    <!-- LiveDartStats removed - statistics only shown in GameCompleteModal at game end -->
 
-    <!-- Checkout Suggestions -->
-    {#if showCheckoutsValue && checkoutService.isCheckoutOpportunity(currentScoreValue)}
-      <div class="px-4 mb-4">
-        <CheckoutSuggestions
-          currentScore={currentScoreValue}
-          dartsRemaining={dartsRemainingValue}
-          checkoutRoutes={checkoutRoutesValue}
-          isVisible={true}
-          onDismiss={() => scoringActions.toggleCheckouts()}
-        />
-      </div>
-    {/if}
+    <!-- CheckoutSuggestions removed - simplified interface -->
 
     <!-- Number Grid -->
     <div class="px-4">

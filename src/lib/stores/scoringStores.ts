@@ -55,9 +55,16 @@ export const dartHistory = writable<DartThrow[]>([]);
 // Current turn's darts (for dart-by-dart mode)
 export const currentTurnDarts = writable<DartThrow[]>([]);
 
-// Undo/Redo functionality
-export const undoStack = writable<DartThrow[][]>([]);
-export const redoStack = writable<DartThrow[][]>([]);
+// Enhanced undo/redo functionality with full game state snapshots
+interface GameSnapshot {
+  dartHistory: DartThrow[];
+  currentTurnDarts: DartThrow[];
+  gameState: GameState;
+  legStartStatus: { homeStarted: boolean; awayStarted: boolean };
+}
+
+export const dartHistoryStack = writable<GameSnapshot[]>([]);
+export const redoStack = writable<GameSnapshot[]>([]);
 
 // Turn total input (for turn-total mode)
 export const turnTotalInput = writable<string>('');
@@ -131,8 +138,8 @@ export const dartsRemaining: Readable<number> = derived(
 );
 
 export const canUndo: Readable<boolean> = derived(
-  [currentTurnDarts],
-  ([$currentTurnDarts]) => $currentTurnDarts.length > 0
+  [dartHistoryStack],
+  ([$dartHistoryStack]) => $dartHistoryStack.length > 0
 );
 
 export const canRedo: Readable<boolean> = derived(
@@ -212,29 +219,43 @@ export const scoringActions = {
     dartInput.set('');
   },
 
-  // Add a dart to current turn (dart-by-dart mode)
+  // Add a dart to current turn (dart-by-dart mode) with comprehensive snapshot
   addDartToCurrentTurn: (score: number, isDouble: boolean = false, isCheckoutAttempt: boolean = false, checkoutSuccessful: boolean = false) => {
+    let currentGameState: GameState;
+    let currentDarts: DartThrow[];
+    let currentHistory: DartThrow[];
+    let currentLegStart: { homeStarted: boolean; awayStarted: boolean };
+
+    gameState.subscribe(s => currentGameState = s)();
+    currentTurnDarts.subscribe(d => currentDarts = d)();
+    dartHistory.subscribe(h => currentHistory = h)();
+    legStartStatus.subscribe(l => currentLegStart = l)();
+
+    if (currentDarts.length >= 3) return;
+
+    dartHistoryStack.update(stack => [...stack, {
+      dartHistory: [...currentHistory],
+      currentTurnDarts: [...currentDarts],
+      gameState: { ...currentGameState },
+      legStartStatus: { ...currentLegStart }
+    }]);
+
+    redoStack.set([]);
+
     currentTurnDarts.update(darts => {
-      if (darts.length >= 3) return darts; // Max 3 darts per turn
-      
-      // Save current state to undo stack before adding new dart
-      undoStack.update(stack => [...stack, [...darts]]);
-      // Clear redo stack when new action is performed
-      redoStack.set([]);
-      
       const newDart: DartThrow = {
         id: crypto.randomUUID(),
-        legNumber: 0, // Will be set when turn is completed
-        turnNumber: 0, // Will be set when turn is completed
+        legNumber: 0,
+        turnNumber: 0,
         dartNumber: darts.length + 1,
         dartScore: score,
-        runningScore: 0, // Will be calculated when turn is completed
+        runningScore: 0,
         isDoubleAttempt: isDouble,
         isCheckoutAttempt,
         checkoutSuccessful,
         timestamp: new Date()
       };
-      
+
       return [...darts, newDart];
     });
   },
@@ -268,50 +289,95 @@ export const scoringActions = {
     checkoutRoutes.set(routes);
   },
 
-  // Undo last dart
+  // Undo last dart with full state restoration
   undoLastDart: () => {
-    let lastState: DartThrow[] | undefined;
-    undoStack.update(stack => {
-      lastState = stack.pop();
+    let currentGameState: GameState;
+    let currentDarts: DartThrow[];
+    let currentHistory: DartThrow[];
+    let currentLegStart: { homeStarted: boolean; awayStarted: boolean };
+
+    gameState.subscribe(s => currentGameState = s)();
+    currentTurnDarts.subscribe(d => currentDarts = d)();
+    dartHistory.subscribe(h => currentHistory = h)();
+    legStartStatus.subscribe(l => currentLegStart = l)();
+
+    let lastSnapshot: GameSnapshot | undefined;
+    dartHistoryStack.update(stack => {
+      lastSnapshot = stack.pop();
       return stack;
     });
-    
-    if (lastState !== undefined) {
-      // Save current state to redo stack
-      redoStack.update(stack => {
-        currentTurnDarts.subscribe(current => {
-          stack.push([...current]);
-        })();
-        return stack;
-      });
-      // Restore previous state
-      currentTurnDarts.set(lastState);
+
+    if (lastSnapshot) {
+      redoStack.update(stack => [...stack, {
+        dartHistory: [...currentHistory],
+        currentTurnDarts: [...currentDarts],
+        gameState: { ...currentGameState },
+        legStartStatus: { ...currentLegStart }
+      }]);
+
+      gameState.set(lastSnapshot.gameState);
+      currentTurnDarts.set(lastSnapshot.currentTurnDarts);
+      dartHistory.set(lastSnapshot.dartHistory);
+      legStartStatus.set(lastSnapshot.legStartStatus);
     }
   },
 
-  // Redo last undone dart
+  // Redo last undone dart with full state restoration
   redoLastDart: () => {
-    let nextState: DartThrow[] | undefined;
+    let currentGameState: GameState;
+    let currentDarts: DartThrow[];
+    let currentHistory: DartThrow[];
+    let currentLegStart: { homeStarted: boolean; awayStarted: boolean };
+
+    gameState.subscribe(s => currentGameState = s)();
+    currentTurnDarts.subscribe(d => currentDarts = d)();
+    dartHistory.subscribe(h => currentHistory = h)();
+    legStartStatus.subscribe(l => currentLegStart = l)();
+
+    let nextSnapshot: GameSnapshot | undefined;
     redoStack.update(stack => {
-      nextState = stack.pop();
+      nextSnapshot = stack.pop();
       return stack;
     });
-    
-    if (nextState !== undefined) {
-      // Save current state to undo stack
-      undoStack.update(stack => {
-        currentTurnDarts.subscribe(current => {
-          stack.push([...current]);
-        })();
-        return stack;
-      });
-      // Restore next state
-      currentTurnDarts.set(nextState);
+
+    if (nextSnapshot) {
+      dartHistoryStack.update(stack => [...stack, {
+        dartHistory: [...currentHistory],
+        currentTurnDarts: [...currentDarts],
+        gameState: { ...currentGameState },
+        legStartStatus: { ...currentLegStart }
+      }]);
+
+      gameState.set(nextSnapshot.gameState);
+      currentTurnDarts.set(nextSnapshot.currentTurnDarts);
+      dartHistory.set(nextSnapshot.dartHistory);
+      legStartStatus.set(nextSnapshot.legStartStatus);
     }
   },
 
-  // Clear current turn
+  // Clear current turn with snapshot
   clearCurrentTurn: () => {
+    let currentGameState: GameState;
+    let currentDarts: DartThrow[];
+    let currentHistory: DartThrow[];
+    let currentLegStart: { homeStarted: boolean; awayStarted: boolean };
+
+    gameState.subscribe(s => currentGameState = s)();
+    currentTurnDarts.subscribe(d => currentDarts = d)();
+    dartHistory.subscribe(h => currentHistory = h)();
+    legStartStatus.subscribe(l => currentLegStart = l)();
+
+    if (currentDarts.length > 0) {
+      dartHistoryStack.update(stack => [...stack, {
+        dartHistory: [...currentHistory],
+        currentTurnDarts: [...currentDarts],
+        gameState: { ...currentGameState },
+        legStartStatus: { ...currentLegStart }
+      }]);
+
+      redoStack.set([]);
+    }
+
     currentTurnDarts.set([]);
     turnTotalInput.set('');
     dartInput.set('');
