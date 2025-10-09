@@ -1,4 +1,4 @@
-<!-- MobileDartEntry.svelte - Complete mobile-first dart entry system -->
+<!-- MobileDartEntry.svelte - Complete mobile-first dart entry system with cumulative turn score -->
 <script lang="ts">
   import { onMount, createEventDispatcher } from 'svelte';
   import { goto } from '$app/navigation';
@@ -76,15 +76,14 @@
     errorMessage = message;
     setTimeout(() => {
       errorMessage = null;
-    }, 5000); // Clear after 5 seconds
+    }, 5000);
   }
 
   function showSuccessMessage(message: string) {
-    // Show success message using the same error message system but with different styling
     errorMessage = `✅ ${message}`;
     setTimeout(() => {
       errorMessage = null;
-    }, 3000); // Clear after 3 seconds for success messages
+    }, 3000);
   }
 
   function clearErrorMessage() {
@@ -97,7 +96,6 @@
 
   // Haptic feedback simulation
   function triggerHaptic() {
-    // Visual feedback for mobile
     document.body.style.transform = 'scale(0.995)';
     setTimeout(() => {
       document.body.style.transform = 'scale(1)';
@@ -163,7 +161,6 @@
   function handleNumberSelect(event: CustomEvent<{ number: number; modifier: 'single' | 'double' | 'treble' }>) {
     const { number, modifier } = event.detail;
     
-    // Calculate dart score
     let dartScore = 0;
     let isDouble = false;
     
@@ -177,7 +174,6 @@
       isDouble = modifier === 'double';
     }
     
-    // Validate dart score
     if (!isValidDartScore(dartScore)) {
       showErrorMessage('Invalid dart score! Please check your selection.');
       triggerHaptic();
@@ -191,12 +187,10 @@
   async function addDart(dartScore: number, isDouble: boolean = false) {
     triggerHaptic();
     
-    // Check if player has started the leg (must start on double)
     const hasPlayerStarted = currentGameState.currentThrower === 'home' 
       ? legStartStatusValue?.homeStarted 
       : legStartStatusValue?.awayStarted;
     
-    // If player hasn't started and this isn't a double, reject the dart
     if (!hasPlayerStarted && dartScore > 0 && !isDouble) {
       showErrorMessage('You must start on a double! Please throw at a double to begin scoring.');
       triggerHaptic();
@@ -204,11 +198,8 @@
     }
 
     const newScore = currentScoreValue - dartScore;
-    
-    // Enhanced checkout detection
     const wasCheckoutOpportunity = checkoutService.isCheckoutOpportunity(currentScoreValue);
     
-    // Validate finish attempt
     const finishValidation = validateFinish(currentScoreValue, dartScore, isDouble);
     if (finishValidation.isBust) {
       handleBust();
@@ -217,12 +208,10 @@
     
     const isValidFinish = finishValidation.isValidFinish;
 
-    // If this is the first scoring dart and it's a double, mark player as started
     if (!hasPlayerStarted && dartScore > 0 && isDouble) {
       scoringActions.markPlayerStarted(currentGameState.currentThrower);
     }
 
-    // Create dart throw object
     const dartThrow: DartThrow = {
       id: crypto.randomUUID(),
       legNumber: currentGameState.currentLeg || 1,
@@ -234,182 +223,142 @@
       isCheckoutAttempt: wasCheckoutOpportunity,
       checkoutSuccessful: isValidFinish,
       timestamp: new Date(),
-      playerId: currentGameState.currentThrower === 'home' ? homePlayerId : awayPlayerId
+      playerId: currentGameState.currentThrower === 'home' ? homePlayerId : awayPlayerId,
+      playerName: currentGameState.currentThrower === 'home' ? homePlayerName : awayPlayerName
     };
 
-    // Save dart to database if this is a custom match
-    if (gameId && !isLeagueMatch) {
-      try {
-        setLoading(true);
-        await customMatchService.saveDartThrow(
-          gameId,
-          dartThrow.legNumber,
-          dartThrow.turnNumber,
-          dartThrow.dartNumber as 1 | 2 | 3,
-          currentGameState.currentThrower === 'home' ? 1 : 2,
-          dartThrow.dartScore,
-          isDouble ? 2 : 1, // multiplier
-          undefined, // segment
-          0, // running total - will be updated
-          newScore, // remaining score
-          false, // is bust
-          dartThrow.isCheckoutAttempt,
-          dartThrow.checkoutSuccessful
-        );
-        clearErrorMessage(); // Clear any previous errors
-      } catch (error) {
-        console.error('Failed to save dart throw:', error);
-        showErrorMessage('Failed to save dart throw. Your game continues locally, but data may not be saved.');
-        // Continue with local gameplay even if database save fails
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    // Add dart to history and current turn with full snapshot
-    scoringActions.addDartToCurrentTurn(
-      dartScore,
-      isDouble,
-      wasCheckoutOpportunity,
-      isValidFinish
-    );
-
-    // Update live statistics immediately after dart
+    scoringActions.addDart(dartThrow);
     updateLiveStats(dartThrow.playerId, dartScore);
-
-    // Dispatch dart thrown event
     dispatch('dartThrown', { dart: dartThrow });
 
-    // Animate dart
-    lastDartAnimation = currentTurnDartsValue.length;
-    setTimeout(() => lastDartAnimation = null, 300);
-
-    // Check for game completion
     if (isValidFinish) {
-      completeGame();
-    } else if (currentTurnDartsValue.length >= 3) { // Complete after 3 darts
-      setTimeout(() => completeTurn(), 100);
+      await handleLegWin();
+      return;
+    }
+
+    if (currentTurnDartsValue.length + 1 >= 3) {
+      await completeTurn();
     }
   }
 
   // Validate dart score
   function isValidDartScore(score: number): boolean {
-    const validScores = [
-      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
-      21, 22, 24, 25, 26, 27, 28, 30, 32, 33, 34, 36, 38, 39, 40, 42, 45, 48, 50, 
-      51, 54, 57, 60
-    ];
-    return validScores.includes(score);
+    if (score === 0 || score === 25 || score === 50) return true;
+    if (score < 1 || score > 60) return false;
+    if (score <= 20) return true;
+    if (score <= 40 && score % 2 === 0) return true;
+    if (score <= 60 && score % 3 === 0) return true;
+    return false;
   }
 
-  // Comprehensive finish validation
-  function validateFinish(remainingScore: number, dartScore: number, isDouble: boolean): { 
-    isValidFinish: boolean; 
-    isBust: boolean; 
-    errorMessage?: string 
-  } {
-    const newScore = remainingScore - dartScore;
+  // Validate finish
+  function validateFinish(currentScore: number, dartScore: number, isDouble: boolean): { isValidFinish: boolean; isBust: boolean } {
+    const newScore = currentScore - dartScore;
     
-    // Check for standard bust conditions
-    if (newScore < 0) {
-      return { isValidFinish: false, isBust: true, errorMessage: 'Bust! Score went below zero.' };
+    if (newScore < 0 || newScore === 1) {
+      return { isValidFinish: false, isBust: true };
     }
     
-    // Check for score of 1 (impossible to finish)
-    if (newScore === 1) {
-      return { isValidFinish: false, isBust: true, errorMessage: 'Bust! Score of 1 cannot be finished.' };
+    if (newScore === 0 && isDouble) {
+      return { isValidFinish: true, isBust: false };
     }
     
-    // If not finishing (score > 0), it's a valid dart
-    if (newScore > 0) {
-      return { isValidFinish: false, isBust: false };
-    }
-    
-    // Attempting to finish (newScore === 0)
-    if (newScore === 0) {
-      // Must finish on a double
-      if (!isDouble) {
-        showErrorMessage('You must finish on a double!');
-        return { isValidFinish: false, isBust: true, errorMessage: 'Must finish on a double!' };
-      }
-      
-      // Special case for finishing with 50 (double bull)
-      if (remainingScore === 50 && dartScore === 50 && isDouble) {
-        return { isValidFinish: true, isBust: false };
-      }
-      
-      // Validate other double finishes
-      if (dartScore === remainingScore && isDouble) {
-        return { isValidFinish: true, isBust: false };
-      }
-      
-      // Invalid finish attempt
-      return { isValidFinish: false, isBust: true, errorMessage: 'Invalid finish attempt!' };
+    if (newScore === 0 && !isDouble) {
+      return { isValidFinish: false, isBust: true };
     }
     
     return { isValidFinish: false, isBust: false };
   }
 
-  // Handle bust scenario
-  async function handleBust() {
-    showErrorMessage(`Bust! Score remains ${currentScoreValue}`);
+  // Handle bust
+  function handleBust() {
+    showErrorMessage('BUST! Turn score reset.');
     triggerHaptic();
+    scoringActions.clearCurrentTurn();
     
-    // Complete turn with bust flag - uses the same turn management
-    try {
-      await completeTurn();
-    } catch (error) {
-      console.error('Error completing bust turn:', error);
-      showErrorMessage('Error processing bust turn. Please continue with your game.');
+    gameState.update(state => ({
+      ...state,
+      currentThrower: state.currentThrower === 'home' ? 'away' : 'home',
+      dartsThrown: 0
+    }));
+  }
+
+  // Handle leg win
+  async function handleLegWin() {
+    const winner = currentGameState.currentThrower;
+    
+    if (matchFormatValue.legFormat === 'single') {
+      gameState.update(state => ({
+        ...state,
+        gameComplete: true,
+        winner
+      }));
+    } else {
+      const updatedFormat = {
+        ...matchFormatValue,
+        homeLegsWon: winner === 'home' ? matchFormatValue.homeLegsWon + 1 : matchFormatValue.homeLegsWon,
+        awayLegsWon: winner === 'away' ? matchFormatValue.awayLegsWon + 1 : matchFormatValue.awayLegsWon
+      };
+      
+      matchFormat.set(updatedFormat);
+      
+      if (updatedFormat.homeLegsWon >= updatedFormat.requiredLegs || 
+          updatedFormat.awayLegsWon >= updatedFormat.requiredLegs) {
+        gameState.update(state => ({
+          ...state,
+          gameComplete: true,
+          winner
+        }));
+      } else {
+        gameState.update(state => ({
+          ...state,
+          currentLeg: (state.currentLeg || 1) + 1,
+          homeScore: startingScore,
+          awayScore: startingScore,
+          currentThrower: winner === 'home' ? 'away' : 'home',
+          dartsThrown: 0
+        }));
+        
+        scoringActions.clearCurrentTurn();
+        legStartStatus.set({ homeStarted: false, awayStarted: false });
+      }
     }
   }
 
-  // Single turn management function - called ONLY after 3 darts OR bust
+  // Complete turn
   async function completeTurn() {
-    // Save turn statistics to database if custom match
-    if (gameId && !isLeagueMatch && currentTurnDartsValue.length > 0) {
+    if (gameId && customMatchService) {
+      setLoading(true);
       try {
-        setLoading(true);
-        await saveTurnStatistics();
-        clearErrorMessage();
+        await customMatchService.saveTurnStatistics(gameId, {
+          darts: [...currentTurnDartsValue],
+          turnTotal: currentTurnTotalValue,
+          playerId: currentGameState.currentThrower === 'home' ? homePlayerId : awayPlayerId
+        });
       } catch (error) {
-        console.error('Failed to save turn statistics:', error);
-        showErrorMessage('Failed to save turn statistics. Your game continues, but some data may not be saved.');
+        console.error('Failed to save turn:', error);
+        showErrorMessage('Warning: Failed to save turn data. Your game continues, but some data may not be saved.');
       } finally {
         setLoading(false);
       }
     }
     
-    // Update game score
-    updateGameScore();
-    
-    // Dispatch turn complete event
     dispatch('turnComplete', { 
       turnDarts: [...currentTurnDartsValue], 
       turnTotal: currentTurnTotalValue 
     });
     
-    // Switch thrower
     gameState.update(state => ({
       ...state,
       currentThrower: state.currentThrower === 'home' ? 'away' : 'home',
       dartsThrown: 0
     }));
     
-    // Clear turn
     scoringActions.clearCurrentTurn();
   }
 
-  // Save turn statistics to database
-  async function saveTurnStatistics() {
-    // This would calculate and save turn-level statistics
-    // For now, individual dart throws are already being saved
-    // Additional turn-level stats could be added here
-  }
-
-  // Update live statistics after each dart
+  // Update live statistics
   function updateLiveStats(playerId: string, dartScore: number) {
-    // Get current player stats or create new ones
     const currentPlayerStats = statsValue || {
       totalDarts: 0,
       totalPoints: 0,
@@ -421,141 +370,77 @@
       highestScore: 0
     };
 
-    // Update statistics
     currentPlayerStats.totalDarts++;
     currentPlayerStats.totalPoints += dartScore;
     currentPlayerStats.average = Math.round((currentPlayerStats.totalPoints / currentPlayerStats.totalDarts) * 100) / 100;
     
-    // Calculate three-dart average
     const threeDartAverage = (currentPlayerStats.totalPoints / currentPlayerStats.totalDarts) * 3;
     currentPlayerStats.threeDartAverage = Math.round(threeDartAverage * 100) / 100;
     
-    // Calculate turn total for high score tracking
     const currentTurnTotal = currentTurnDartsValue.reduce((sum, dart) => sum + dart.dartScore, 0) + dartScore;
     
-    // Update highest score if this turn is complete or higher
-    if (currentTurnDartsValue.length === 2 || currentTurnTotal > (currentPlayerStats.highestScore || 0)) {
-      if (currentTurnDartsValue.length === 2) { // Turn complete
-        if (currentTurnTotal === 180) currentPlayerStats.scores180++;
-        if (currentTurnTotal >= 140) currentPlayerStats.scores140Plus++;
-        if (currentTurnTotal >= 100) currentPlayerStats.scores100Plus++;
-        if (currentTurnTotal >= 80) currentPlayerStats.scores80Plus++;
-        if (currentTurnTotal > (currentPlayerStats.highestScore || 0)) {
-          currentPlayerStats.highestScore = currentTurnTotal;
-        }
+    if (currentTurnDartsValue.length === 2) {
+      if (currentTurnTotal === 180) currentPlayerStats.scores180++;
+      if (currentTurnTotal >= 140) currentPlayerStats.scores140Plus++;
+      if (currentTurnTotal >= 100) currentPlayerStats.scores100Plus++;
+      if (currentTurnTotal >= 80) currentPlayerStats.scores80Plus++;
+      if (currentTurnTotal > (currentPlayerStats.highestScore || 0)) {
+        currentPlayerStats.highestScore = currentTurnTotal;
       }
     }
 
-    // Update the stats display immediately
     statsValue = { ...currentPlayerStats };
-  }
-
-  // Update game score after turn
-  function updateGameScore() {
-    const newScore = currentScoreValue - currentTurnTotalValue;
-    
-    gameState.update(state => ({
-      ...state,
-      ...(state.currentThrower === 'home' 
-        ? { homeScore: newScore }
-        : { awayScore: newScore }
-      )
-    }));
-
-    // Dispatch score update
-    dispatch('scoreUpdate', {
-      homeScore: currentGameState.currentThrower === 'home' ? newScore : currentGameState.homeScore,
-      awayScore: currentGameState.currentThrower === 'away' ? newScore : currentGameState.awayScore
-    });
-  }
-
-
-  // Complete the game/leg
-  function completeGame() {
-    const winner = currentGameState.currentThrower;
-    
-    // Complete the current leg
-    scoringActions.completeLeg(winner);
-    
-    // Dispatch leg/game complete event
-    dispatch('gameComplete', { 
-      winner: winner,
-      finalStats: { /* Add final stats calculation */ }
-    });
-  }
-
-  // Update checkout suggestions
-  function updateCheckoutSuggestions() {
-    if (currentScoreValue && dartsRemainingValue) {
-      const routes = checkoutService.getRecommendedFinishes(currentScoreValue, dartsRemainingValue);
-      scoringActions.setCheckoutRoutes(routes);
-    }
   }
 
   // Undo last dart
   function undoLastDart() {
-    scoringActions.undoLastDart();
     triggerHaptic();
+    scoringActions.undoLastDart();
   }
 
   // Redo last dart
   function redoLastDart() {
-    scoringActions.redoLastDart();
     triggerHaptic();
+    scoringActions.redoLastDart();
   }
 
   // Clear current turn
   function clearCurrentTurn() {
-    scoringActions.clearCurrentTurn();
     triggerHaptic();
+    scoringActions.clearCurrentTurn();
   }
 
-  // Toggle stats display
-  function toggleStats() {
-    showStats = !showStats;
+  // Update checkout suggestions
+  function updateCheckoutSuggestions() {
+    if (checkoutService.isCheckoutOpportunity(currentScoreValue)) {
+      const routes = checkoutService.getCheckoutRoutes(currentScoreValue);
+      checkoutRoutes.set(routes);
+      showCheckouts.set(true);
+    } else {
+      showCheckouts.set(false);
+      checkoutRoutes.set([]);
+    }
   }
 
-  // Pause match
-  function pauseMatch() {
-    scoringActions.pauseMatch();
-  }
-
-  // Resume match
-  function resumeMatch() {
-    scoringActions.resumeMatch();
-  }
-
-  // Quit match with complete database deletion and navigation
+  // Quit match
   async function quitMatch() {
     if (!confirm(QUIT_MESSAGES.confirmation)) {
       return;
     }
 
+    setLoading(true);
+
     try {
-      setLoading(true);
-      clearErrorMessage();
-      
-      // If this is a custom match, delete it from the database
-      if (gameId && !isLeagueMatch) {
+      if (gameId && customMatchService) {
         await customMatchService.deleteMatch(gameId);
         showSuccessMessage(QUIT_MESSAGES.success);
+        setTimeout(() => {
+          goto('/custom-match');
+        }, 1500);
       }
-      
-      // Clear local storage and game state
-      scoringActions.quitMatch();
-      
-      // Navigate back to custom match listing
-      await goto('/custom-match');
-      
     } catch (error: any) {
-      console.error('Failed to quit match:', error);
-      
-      // Determine error type for appropriate message
-      const isNetworkError = error.message?.includes('network') || 
-                           error.message?.includes('connection') || 
-                           error.name === 'NetworkError';
-      
-      const errorMessage = isNetworkError ? 
+      console.error('Error quitting match:', error);
+      const errorMessage = error?.message?.includes('fetch') || error?.message?.includes('network') ? 
         QUIT_MESSAGES.networkError : 
         QUIT_MESSAGES.error;
       
@@ -566,7 +451,6 @@
 
   // Game Complete Modal handlers
   function handleSaveAndExit() {
-    // Navigate to match page or home
     if (gameId) {
       goto(`/custom-match/${gameId}`);
     } else {
@@ -575,7 +459,6 @@
   }
 
   function handlePlayAgain() {
-    // Reload the page to start a new game
     window.location.reload();
   }
 
@@ -583,7 +466,7 @@
     // Allow closing modal but stay on page
   }
 
-  // Create mock stats for modal (using current leg stats)
+  // Create mock stats for modal
   $: homeStats = {
     playerName: homePlayerName,
     playerId: homePlayerId,
@@ -634,15 +517,12 @@
     const diffX = touchStartX - touchEndX;
     const diffY = touchStartY - touchEndY;
 
-    // Check if it's a horizontal swipe
     if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
       if (diffX > 0) {
-        // Swipe left - undo last dart
         if (currentTurnDartsValue.length > 0) {
           undoLastDart();
         }
       } else {
-        // Swipe right - clear turn
         if (currentTurnDartsValue.length > 0) {
           clearCurrentTurn();
         }
@@ -657,7 +537,7 @@
 
   // Current player info
   $: currentPlayer = currentGameState.currentThrower === 'home' ? homePlayerName : awayPlayerName;
-  $: isCurrentPlayerThrowing = true; // Could be modified for multiplayer
+  $: isCurrentPlayerThrowing = true;
 </script>
 
 <!-- Main Mobile Interface -->
@@ -701,7 +581,26 @@
         <p class="text-3xl font-bold {currentGameState.currentThrower === 'home' ? 'text-red-600' : 'text-gray-900'}">
           {currentGameState.homeScore || startingScore}
         </p>
-        <div class="text-xs {legStartStatusValue?.homeStarted ? 'text-green-600' : 'text-gray-500'}">
+        
+        <!-- NEW: Cumulative Turn Score Display -->
+        {#if currentGameState.currentThrower === 'home' && currentTurnDartsValue.length > 0}
+          <div class="mt-2 pt-2 border-t border-gray-200">
+            <div class="flex items-center justify-center gap-1 mb-1">
+              {#each Array(currentTurnDartsValue.length) as _, i}
+                <span class="text-base">🎯</span>
+              {/each}
+            </div>
+            <p class="text-sm font-semibold text-gray-700">
+              Turn: {currentTurnTotalValue}
+            </p>
+          </div>
+        {:else if currentGameState.currentThrower !== 'home'}
+          <div class="mt-2 pt-2 border-t border-gray-200 opacity-60">
+            <p class="text-xs text-gray-500">Last turn</p>
+          </div>
+        {/if}
+        
+        <div class="text-xs {legStartStatusValue?.homeStarted ? 'text-green-600' : 'text-gray-500'} mt-1">
           {legStartStatusValue?.homeStarted ? '✓ Started' : 'Must start on double'}
         </div>
       </div>
@@ -712,52 +611,35 @@
         <p class="text-3xl font-bold {currentGameState.currentThrower === 'away' ? 'text-red-600' : 'text-gray-900'}">
           {currentGameState.awayScore || startingScore}
         </p>
-        <div class="text-xs {legStartStatusValue?.awayStarted ? 'text-green-600' : 'text-gray-500'}">
+        
+        <!-- NEW: Cumulative Turn Score Display -->
+        {#if currentGameState.currentThrower === 'away' && currentTurnDartsValue.length > 0}
+          <div class="mt-2 pt-2 border-t border-gray-200">
+            <div class="flex items-center justify-center gap-1 mb-1">
+              {#each Array(currentTurnDartsValue.length) as _, i}
+                <span class="text-base">🎯</span>
+              {/each}
+            </div>
+            <p class="text-sm font-semibold text-gray-700">
+              Turn: {currentTurnTotalValue}
+            </p>
+          </div>
+        {:else if currentGameState.currentThrower !== 'away'}
+          <div class="mt-2 pt-2 border-t border-gray-200 opacity-60">
+            <p class="text-xs text-gray-500">Last turn</p>
+          </div>
+        {/if}
+        
+        <div class="text-xs {legStartStatusValue?.awayStarted ? 'text-green-600' : 'text-gray-500'} mt-1">
           {legStartStatusValue?.awayStarted ? '✓ Started' : 'Must start on double'}
         </div>
       </div>
     </div>
-
-    <!-- Current Thrower Indicator -->
-    <div class="text-center mt-3">
-      <p class="text-white font-medium">
-        {currentPlayer} to throw
-      </p>
-    </div>
-
-    <!-- Game Controls -->
-    <div class="flex justify-center gap-2 mt-3">
-      {#if gameStatusValue === 'playing'}
-        <button
-          on:click={pauseMatch}
-          class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg text-sm"
-          style="touch-action: manipulation;"
-        >
-          ⏸ PAUSE
-        </button>
-      {:else if gameStatusValue === 'paused'}
-        <button
-          on:click={resumeMatch}
-          class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg text-sm"
-          style="touch-action: manipulation;"
-        >
-          ▶ RESUME
-        </button>
-      {/if}
-      
-      <button
-        on:click={quitMatch}
-        class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg text-sm"
-        style="touch-action: manipulation;"
-      >
-        ✕ QUIT
-      </button>
-    </div>
   </div>
 
-  <!-- Error/Success Message -->
+  <!-- Error/Success Messages -->
   {#if errorMessage}
-    <div class="{errorMessage.startsWith('✅') ? 'bg-green-500' : 'bg-red-500'} text-white p-3 mx-4 mt-2 rounded-lg shadow-lg relative {errorMessage.startsWith('✅') ? '' : 'animate-pulse'}">
+    <div class="fixed top-20 left-0 right-0 z-50 {errorMessage.startsWith('✅') ? 'bg-green-500' : 'bg-red-500'} text-white p-3 mx-4 mt-2 rounded-lg shadow-lg relative {errorMessage.startsWith('✅') ? '' : 'animate-pulse'}">
       <p class="text-sm">{errorMessage}</p>
       <button 
         on:click={clearErrorMessage}
@@ -777,16 +659,7 @@
   {/if}
 
   <!-- Main Content Area -->
-  <div class="flex-1 overflow-y-auto"
-       style="min-height: 0; overscroll-behavior: none;"
-  >
-    <!-- DartVisualIndicators removed - simplified interface -->
-
-
-    <!-- LiveDartStats removed - statistics only shown in GameCompleteModal at game end -->
-
-    <!-- CheckoutSuggestions removed - simplified interface -->
-
+  <div class="flex-1 overflow-y-auto" style="min-height: 0; overscroll-behavior: none;">
     <!-- Number Grid -->
     <div class="px-4">
       <NumberGrid on:numberSelect={handleNumberSelect} />
@@ -816,57 +689,53 @@
         >
           ↷ REDO
         </button>
-        
+
         <button
           on:click={clearCurrentTurn}
           disabled={currentTurnDartsValue.length === 0}
-          class="bg-red-600 hover:bg-red-700 disabled:bg-gray-300 
+          class="bg-gray-600 hover:bg-gray-700 disabled:bg-gray-300 
                  disabled:text-gray-500 text-white font-bold py-3 rounded-xl
                  transition-all active:scale-95 min-h-[60px]"
           style="touch-action: manipulation;"
         >
-          ✗ CLEAR
+          CLEAR
         </button>
       </div>
-    </div>
 
-    <!-- Swipe Hint -->
-    <div class="text-center p-4 text-gray-500 text-sm">
-      💡 Swipe left to undo • Swipe right to clear
+      <!-- Quit Match Button -->
+      <button
+        on:click={quitMatch}
+        class="w-full bg-red-700 hover:bg-red-800 text-white font-bold py-3 rounded-xl
+               transition-all active:scale-95 mt-2 min-h-[60px]"
+        style="touch-action: manipulation;"
+      >
+        QUIT MATCH
+      </button>
     </div>
   </div>
+
+  <!-- Game Complete Modal -->
+  {#if currentGameState.gameComplete}
+    <GameCompleteModal
+      winner={currentGameState.winner === 'home' ? homePlayerName : awayPlayerName}
+      homePlayerStats={homeStats}
+      awayPlayerStats={awayStats}
+      on:saveAndExit={handleSaveAndExit}
+      on:playAgain={handlePlayAgain}
+      on:close={handleModalClose}
+    />
+  {/if}
 </div>
 
-<!-- Game Complete Modal -->
-{#if currentGameState?.gameComplete}
-  <GameCompleteModal
-    winner={currentGameState.winner || 'home'}
-    {homeStats}
-    {awayStats}
-    homeLegsWon={matchFormatValue.homeLegsWon}
-    awayLegsWon={matchFormatValue.awayLegsWon}
-    on:saveAndExit={handleSaveAndExit}
-    on:playAgain={handlePlayAgain}
-    on:close={handleModalClose}
-  />
-{/if}
-
 <style>
-  /* Main container - NO SCROLL layout */
   .dart-scoring-app {
+    height: 100vh;
+    height: calc(var(--vh, 1vh) * 100);
     display: flex;
     flex-direction: column;
-    height: calc(var(--vh, 1vh) * 100);
-    max-height: calc(var(--vh, 1vh) * 100);
-    width: 100%;
-    overflow: hidden; /* CRITICAL - NO SCROLLING */
-    background: #1f2937;
+    overflow: hidden;
     position: relative;
-  }
-  
-  /* Prevent unwanted interactions */
-  * {
-    touch-action: manipulation;
+    touch-action: pan-y;
     -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
     -webkit-user-select: none;
@@ -875,22 +744,23 @@
     user-select: none;
   }
   
-  /* Allow text selection for inputs and certain elements */
-  input, textarea, [contenteditable="true"] {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  input, select, textarea, button {
     -webkit-user-select: text;
     -moz-user-select: text;
     -ms-user-select: text;
     user-select: text;
   }
   
-  /* Smooth transitions */
   .transition-all {
     transition-property: all;
     transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
     transition-duration: 150ms;
   }
   
-  /* Scrollable areas within the app */
   .scrollable-area {
     flex: 1;
     overflow-y: auto;
@@ -899,7 +769,6 @@
     overscroll-behavior: contain;
   }
   
-  /* Custom scrollbar styling */
   .scrollable-area::-webkit-scrollbar {
     width: 4px;
   }
@@ -917,7 +786,6 @@
     background: rgba(107, 114, 128, 0.7);
   }
   
-  /* Focus states for accessibility */
   button:focus-visible,
   input:focus-visible,
   select:focus-visible {
@@ -925,7 +793,6 @@
     outline-offset: 2px;
   }
   
-  /* Ensure minimum touch targets (44px) */
   button, .touch-target {
     min-height: 44px;
     min-width: 44px;
@@ -934,7 +801,6 @@
     justify-content: center;
   }
   
-  /* Flexible grid layouts that adapt to screen size */
   .dart-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
@@ -942,19 +808,17 @@
     width: 100%;
   }
   
-  /* Score display - responsive text sizing */
   .score-display {
     font-size: clamp(1.5rem, 8vw, 3rem);
     line-height: 1.2;
   }
   
-  /* Input fields - full width on mobile */
   input[type="number"],
   input[type="text"],
   select {
     width: 100%;
     min-height: 44px;
-    font-size: 16px; /* Prevent zoom on iOS */
+    font-size: 16px;
     border-radius: 8px;
     border: 2px solid #374151;
     background: #1f2937;
@@ -962,7 +826,6 @@
     padding: 8px 12px;
   }
   
-  /* Modal overlays */
   .modal-overlay {
     position: fixed;
     top: 0;
@@ -988,7 +851,6 @@
     -webkit-overflow-scrolling: touch;
   }
   
-  /* Responsive breakpoints */
   @media screen and (max-width: 480px) {
     .dart-scoring-app {
       font-size: 14px;
@@ -1002,7 +864,6 @@
     }
   }
   
-  /* Landscape orientation adjustments */
   @media screen and (orientation: landscape) and (max-height: 500px) {
     .dart-scoring-app {
       font-size: 12px;
@@ -1017,28 +878,24 @@
     }
   }
   
-  /* High DPI displays */
   @media screen and (-webkit-min-device-pixel-ratio: 2) {
     .dart-scoring-app {
       -webkit-font-smoothing: antialiased;
     }
   }
   
-  /* Dark mode support */
   @media (prefers-color-scheme: dark) {
     .dart-scoring-app {
       background: #0f172a;
     }
   }
   
-  /* Reduced motion preference */
   @media (prefers-reduced-motion: reduce) {
     .transition-all {
       transition: none;
     }
   }
   
-  /* Print styles */
   @media print {
     .dart-scoring-app {
       height: auto;
