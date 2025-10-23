@@ -89,24 +89,33 @@
       saving = true;
       error = '';
 
-      // Prepare attendance records
+      // Delete existing attendance records for this week
+      const { error: deleteError } = await supabase
+        .from('attendance')
+        .delete()
+        .eq('week_number', currentWeek)
+        .eq('league_year', '2025/26');
+
+      if (deleteError) {
+        throw new Error('Failed to clear existing attendance: ' + deleteError.message);
+      }
+
+      // Prepare new attendance records
       const records = players.map(player => ({
         player_id: player.id,
         week_number: currentWeek,
         league_year: '2025/26',
         available: attendance.get(player.id) ?? true,
-        created_at: new Date().toISOString()
+        selected: false
       }));
 
-      // Save to database
-      const { error: saveError } = await supabase
+      // Insert new records
+      const { error: insertError } = await supabase
         .from('attendance')
-        .upsert(records, {
-          onConflict: 'player_id,week_number,league_year'
-        });
+        .insert(records);
 
-      if (saveError) {
-        throw new Error('Failed to save attendance: ' + saveError.message);
+      if (insertError) {
+        throw new Error('Failed to save attendance: ' + insertError.message);
       }
 
       hasChanges = false;
