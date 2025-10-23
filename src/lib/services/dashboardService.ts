@@ -201,14 +201,13 @@ export class DashboardService {
           *,
           player:players(*)
         `)
-        .eq('week_number', weekNumber)
-        .eq('league_year', '2025/26');
-      
+        .eq('week_number', weekNumber);
+
       if (error && error.code !== 'PGRST116') {
         console.error('Error fetching attendance:', error);
         throw error;
       }
-      
+
       return data || [];
     } catch (err: any) {
       console.error('getWeeklyAttendance error:', err);
@@ -232,10 +231,10 @@ export class DashboardService {
       await retryDatabaseOperation(async () => {
         const { error } = await supabase
           .from('attendance')
-          .upsert(records, { 
-            onConflict: 'player_id,week_number,league_year'
+          .upsert(records, {
+            onConflict: 'player_id,week_number'
           });
-        
+
         if (error) {
           console.error('Error saving attendance:', error);
           throw error;
