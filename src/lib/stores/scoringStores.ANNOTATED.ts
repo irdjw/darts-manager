@@ -1033,7 +1033,522 @@ export const scoringActions = {
     dartInput.set('');
   },
 
-  // ... More actions documented below ...
+  /**
+   * HAS PLAYER STARTED - Check If Current Player Hit Double to Begin
+   *
+   * CALLED BY: UI to determine if player needs double-start or can score normally
+   *
+   * WHY IT EXISTS:
+   * Some darts leagues require players to hit a double before they can start scoring.
+   * This checks if the current thrower has already hit their starting double.
+   *
+   * RETURNS: Promise<boolean>
+   * - true: Player has started (can score normally)
+   * - false: Player hasn't started (must hit double first)
+   *
+   * HOW IT WORKS:
+   * 1. Get current thrower from gameState (home or away)
+   * 2. Check legStartStatus to see if that player has started
+   * 3. Return boolean result
+   *
+   * EXAMPLE:
+   * const started = await scoringActions.hasPlayerStarted();
+   * if (!started) {
+   *   // Show "Must hit double to start" message
+   * }
+   */
+  hasPlayerStarted: (): Promise<boolean> => {
+    return new Promise(resolve => {
+      const gameUnsubscribe = gameState.subscribe(gameState => {
+        const legUnsubscribe = legStartStatus.subscribe(legStatus => {
+          const hasStarted = gameState.currentThrower === 'home'
+            ? legStatus.homeStarted
+            : legStatus.awayStarted;
+          resolve(hasStarted);
+          gameUnsubscribe();
+          legUnsubscribe();
+        });
+      });
+    });
+  },
+
+  /**
+   * GET CURRENT GAME STATE - Snapshot of Game for External Use
+   *
+   * CALLED BY: Components that need one-time access to game state
+   *
+   * WHY ASYNC:
+   * Svelte stores are reactive. To get a single snapshot value, we subscribe,
+   * grab the value, then immediately unsubscribe.
+   *
+   * RETURNS: Promise<GameState>
+   * Complete game state object with scores, current leg, thrower, etc.
+   *
+   * USE CASE:
+   * When you need game state once (e.g., to save to database) rather than
+   * continuously reacting to changes.
+   */
+  getCurrentGameState: (): Promise<GameState> => {
+    return new Promise(resolve => {
+      const unsubscribe = gameState.subscribe(state => {
+        resolve(state);
+        unsubscribe();
+      });
+    });
+  },
+
+  /**
+   * PAUSE MATCH - Save Progress and Stop Game
+   *
+   * CALLED BY: Pause button in UI
+   *
+   * WHAT IT DOES:
+   * 1. Sets game status to 'paused'
+   * 2. Saves entire match state to localStorage
+   * 3. UI can show "Resume" button
+   *
+   * WHY SAVE TO LOCALSTORAGE:
+   * User might close browser tab. When they return, game can be restored.
+   *
+   * EXAMPLE FLOW:
+   * 1. Player 1 is leading 2-1 in legs
+   * 2. Captain needs bathroom break
+   * 3. Click pause → saves to localStorage
+   * 4. Browser closed
+   * 5. Browser reopened → game restored from localStorage
+   */
+  pauseMatch: () => {
+    gameStatus.set('paused');
+    saveMatchToLocalStorage();
+  },
+
+  /**
+   * RESUME MATCH - Continue Paused Game
+   *
+   * CALLED BY: Resume button in UI
+   *
+   * WHAT IT DOES:
+   * Simply changes status from 'paused' to 'playing'
+   * Game state is already in memory, so just unpause
+   */
+  resumeMatch: () => {
+    gameStatus.set('playing');
+  },
+
+  /**
+   * QUIT MATCH - End Game Without Saving
+   *
+   * CALLED BY: Quit/Exit button in UI
+   *
+   * WHAT IT DOES:
+   * 1. Sets game status to 'finished'
+   * 2. Clears localStorage (no resume possible)
+   * 3. User will be returned to dashboard/menu
+   *
+   * USE CASE:
+   * User accidentally started wrong match type, or wants to abandon practice game
+   */
+  quitMatch: () => {
+    gameStatus.set('finished');
+    clearMatchFromLocalStorage();
+  },
+
+  /**
+   * SET MATCH FORMAT - Define Best-of-X Format
+   *
+   * CALLED BY: Match setup screen before game starts
+   *
+   * FORMATS:
+   * - 'single': Just 1 leg (first to win 1 leg wins match)
+   * - 'bo3': Best of 3 (first to win 2 legs wins match)
+   * - 'bo5': Best of 5 (first to win 3 legs wins match)
+   * - 'bo7': Best of 7 (first to win 4 legs wins match)
+   *
+   * WHAT IT DOES:
+   * 1. Sets the match format
+   * 2. Calculates required legs to win
+   * 3. Resets leg counters to 0-0
+   *
+   * EXAMPLE:
+   * scoringActions.setMatchFormat('bo5');
+   * // Now first player to win 3 legs wins the match
+   */
+  setMatchFormat: (format: 'single' | 'bo3' | 'bo5' | 'bo7') => {
+    const requiredLegsMap = {
+      single: 1,  // Need 1 leg to win match
+      bo3: 2,     // Need 2 legs to win match
+      bo5: 3,     // Need 3 legs to win match
+      bo7: 4      // Need 4 legs to win match
+    };
+
+    matchFormat.set({
+      legFormat: format,
+      homeLegsWon: 0,
+      awayLegsWon: 0,
+      requiredLegs: requiredLegsMap[format]
+    });
+  },
+
+  /**
+   * COMPLETE LEG - End Current Leg and Check If Match Complete
+   *
+   * CALLED BY: Scoring logic when a player reaches exactly 0
+   *
+   * PARAMETERS:
+   * - winner: 'home' | 'away' - Who won this leg
+   *
+   * WHAT IT DOES:
+   * 1. Increment leg counter for winner
+   * 2. Check if winner has won enough legs to win match
+   * 3. If match complete:
+   *    - Mark game as complete
+   *    - Set winner
+   *    - Set status to 'finished'
+   * 4. If match NOT complete:
+   *    - Start next leg
+   *    - Reset scores to 501
+   *    - Reset leg start status
+   *    - Clear current turn
+   *
+   * EXAMPLE FLOW (Best of 5):
+   * Leg 1: Home wins → homeLegsWon = 1, awayLegsWon = 0 → Continue
+   * Leg 2: Away wins → homeLegsWon = 1, awayLegsWon = 1 → Continue
+   * Leg 3: Home wins → homeLegsWon = 2, awayLegsWon = 1 → Continue
+   * Leg 4: Home wins → homeLegsWon = 3, awayLegsWon = 1 → MATCH COMPLETE (home won 3/5)
+   */
+  completeLeg: (winner: 'home' | 'away') => {
+    let matchCompleted = false;
+
+    matchFormat.update(format => {
+      const newFormat = { ...format };
+
+      // Increment leg counter for winner
+      if (winner === 'home') {
+        newFormat.homeLegsWon++;
+      } else {
+        newFormat.awayLegsWon++;
+      }
+
+      // Check if match is complete
+      if (newFormat.homeLegsWon >= newFormat.requiredLegs ||
+          newFormat.awayLegsWon >= newFormat.requiredLegs) {
+        matchCompleted = true;
+        gameState.update(state => ({ ...state, gameComplete: true, winner }));
+        gameStatus.set('finished');
+      }
+
+      return newFormat;
+    });
+
+    // If match not complete, start next leg
+    if (!matchCompleted) {
+      gameState.update(state => ({
+        ...state,
+        currentLeg: state.currentLeg + 1,
+        homeScore: 501,
+        awayScore: 501,
+        dartsThrown: 0
+      }));
+
+      legStartStatus.set({
+        homeStarted: false,
+        awayStarted: false
+      });
+
+      currentTurnDarts.set([]);
+    }
+  },
+
+  /**
+   * GET REQUIRED LEGS - How Many Legs Needed to Win Match
+   *
+   * RETURNS: Promise<number>
+   * Number of legs needed to win current match format
+   *
+   * EXAMPLE:
+   * const required = await scoringActions.getRequiredLegs();
+   * // In best-of-5, returns 3
+   */
+  getRequiredLegs: (): Promise<number> => {
+    return new Promise(resolve => {
+      const unsubscribe = matchFormat.subscribe(format => {
+        resolve(format.requiredLegs);
+        unsubscribe();
+      });
+    });
+  }
 };
 
-// NOTE: This file is 642 lines total. Continue documentation for remaining actions...
+/**
+ * ============================================================================
+ * HELPER FUNCTIONS - LocalStorage Persistence
+ * ============================================================================
+ */
+
+/**
+ * SAVE MATCH TO LOCALSTORAGE - Persist Game State
+ *
+ * WHY THIS EXISTS:
+ * If user closes browser or app crashes, game can be restored
+ *
+ * WHAT IT SHOULD SAVE:
+ * - gameState (scores, current leg, thrower)
+ * - matchFormat (format, leg counters)
+ * - dartHistory (all darts thrown)
+ * - legHistory (completed legs)
+ * - gameStats (player statistics)
+ *
+ * CURRENT STATUS: Placeholder (not yet implemented)
+ *
+ * IMPLEMENTATION WOULD LOOK LIKE:
+ * const state = get(gameState);
+ * const format = get(matchFormat);
+ * const history = get(dartHistory);
+ * localStorage.setItem('currentMatch', JSON.stringify({
+ *   state, format, history, timestamp: Date.now()
+ * }));
+ */
+function saveMatchToLocalStorage() {
+  // TODO: Implementation needed
+  // Should serialize all relevant stores to localStorage
+}
+
+/**
+ * CLEAR MATCH FROM LOCALSTORAGE - Remove Saved Game
+ *
+ * CALLED BY: quitMatch() when user abandons game
+ *
+ * WHAT IT DOES:
+ * Removes saved match from localStorage so it can't be restored
+ *
+ * CURRENT STATUS: Placeholder (not yet implemented)
+ *
+ * IMPLEMENTATION:
+ * localStorage.removeItem('currentMatch');
+ */
+function clearMatchFromLocalStorage() {
+  // TODO: Implementation needed
+}
+
+/**
+ * ============================================================================
+ * UTILITY DERIVED STORES - Simple UI Helpers
+ * ============================================================================
+ */
+
+/**
+ * HOME SCORE DISPLAY - String Version of Home Score
+ *
+ * WHY IT EXISTS:
+ * UI components often need scores as strings for display
+ * This avoids doing .toString() in every component
+ *
+ * EXAMPLE:
+ * <div>{$homeScoreDisplay}</div>  // Shows "501" or "141" etc.
+ */
+export const homeScoreDisplay: Readable<string> = derived(
+  gameState,
+  ($gameState) => $gameState.homeScore.toString()
+);
+
+/**
+ * AWAY SCORE DISPLAY - String Version of Away Score
+ *
+ * Same concept as homeScoreDisplay but for away player
+ */
+export const awayScoreDisplay: Readable<string> = derived(
+  gameState,
+  ($gameState) => $gameState.awayScore.toString()
+);
+
+/**
+ * CURRENT THROWER NAME - Human-Readable Thrower
+ *
+ * Converts 'home' | 'away' to 'Home' | 'Away' for display
+ *
+ * USE CASE:
+ * <p>Current thrower: {$currentThrowerName}</p>
+ * Shows: "Current thrower: Home"
+ */
+export const currentThrowerName: Readable<string> = derived(
+  gameState,
+  ($gameState) => $gameState.currentThrower === 'home' ? 'Home' : 'Away'
+);
+
+/**
+ * DARTS REMAINING DISPLAY - User-Friendly Dart Count
+ *
+ * Shows how many darts left in current turn with proper grammar
+ *
+ * EXAMPLES:
+ * - 3 darts remaining
+ * - 2 darts remaining
+ * - 1 dart remaining (note: singular "dart" not "darts")
+ *
+ * ⚠️ DUPLICATE ALERT:
+ * This is similar to 'dartsRemaining' and 'currentDartsRemaining'
+ * Consider consolidating these into one store
+ */
+export const dartsRemainingDisplay: Readable<string> = derived(
+  gameState,
+  ($gameState) => {
+    const remaining = 3 - $gameState.dartsThrown;
+    return `${remaining} dart${remaining !== 1 ? 's' : ''} remaining`;
+  }
+);
+
+/**
+ * ============================================================================
+ * STATISTICS DERIVED STORE - Real-Time Leg Statistics
+ * ============================================================================
+ */
+
+/**
+ * CURRENT LEG STATS - Live Statistics for Current Leg
+ *
+ * RECALCULATES: Every time a dart is thrown
+ *
+ * DEPENDS ON:
+ * - dartHistory: All darts thrown in the game
+ * - gameState: Current leg number
+ *
+ * CALCULATES:
+ * - totalDarts: How many darts thrown this leg
+ * - totalPoints: Sum of all dart scores this leg
+ * - average: Points per dart (3-dart average would be this × 3)
+ * - scores80Plus: How many 3-dart turns scored 80+
+ * - scores100Plus: How many 3-dart turns scored 100+
+ * - scores140Plus: How many 3-dart turns scored 140+
+ * - scores180: How many perfect turns (180 = T20, T20, T20)
+ *
+ * HOW IT WORKS:
+ * 1. Filter dartHistory to only current leg
+ * 2. Sum up all dart scores
+ * 3. Calculate average per dart
+ * 4. Group darts by turn number
+ * 5. Sum each turn's 3 darts
+ * 6. Count how many turns hit each milestone
+ *
+ * EXAMPLE DATA:
+ * {
+ *   totalDarts: 15,
+ *   totalPoints: 725,
+ *   average: 48.33,  // (725 / 15)
+ *   scores80Plus: 3,
+ *   scores100Plus: 2,
+ *   scores140Plus: 1,
+ *   scores180: 0
+ * }
+ *
+ * USE CASE:
+ * Display live stats during game to show player performance
+ */
+export const currentLegStats: Readable<Partial<PlayerGameStats>> = derived(
+  [dartHistory, gameState],
+  ([$dartHistory, $gameState]) => {
+    // Filter to only darts from current leg
+    const currentLegDarts = $dartHistory.filter(
+      dart => dart.legNumber === $gameState.currentLeg
+    );
+
+    // No darts yet? Return zeros
+    if (currentLegDarts.length === 0) {
+      return {
+        totalDarts: 0,
+        totalPoints: 0,
+        average: 0,
+        scores80Plus: 0,
+        scores100Plus: 0,
+        scores140Plus: 0,
+        scores180: 0
+      };
+    }
+
+    // Calculate basic stats
+    const totalDarts = currentLegDarts.length;
+    const totalPoints = currentLegDarts.reduce((sum, dart) => sum + dart.dartScore, 0);
+    const average = totalDarts > 0 ? totalPoints / totalDarts : 0;
+
+    // Calculate turn totals for high score counts
+    // Group darts by turn number and sum them
+    const turnTotals = new Map<string, number>();
+    currentLegDarts.forEach(dart => {
+      const key = `${dart.turnNumber}`;
+      turnTotals.set(key, (turnTotals.get(key) || 0) + dart.dartScore);
+    });
+
+    // Convert to array of turn scores
+    const turnScores = Array.from(turnTotals.values());
+
+    // Count milestone scores
+    return {
+      totalDarts,
+      totalPoints,
+      average: Math.round(average * 100) / 100,  // Round to 2 decimal places
+      scores80Plus: turnScores.filter(score => score >= 80).length,
+      scores100Plus: turnScores.filter(score => score >= 100).length,
+      scores140Plus: turnScores.filter(score => score >= 140).length,
+      scores180: turnScores.filter(score => score === 180).length
+    };
+  }
+);
+
+/**
+ * ============================================================================
+ * END OF SCORINGSTORES.TS ANNOTATION
+ * ============================================================================
+ *
+ * SUMMARY - What This File Provides:
+ *
+ * 1. **Core Game State** (gameState, gameStatus)
+ *    - Current scores, current leg, whose turn, game complete status
+ *
+ * 2. **Match Format** (matchFormat)
+ *    - Best-of-X format, leg counters, required legs to win
+ *
+ * 3. **Input Management** (scoringMode, currentInput, turnTotalInput, dartInput)
+ *    - How user enters darts (per-dart vs turn-total)
+ *    - Current input values
+ *
+ * 4. **Dart Tracking** (dartHistory, currentTurnDarts)
+ *    - Every dart thrown with full details
+ *    - Current turn's darts before completion
+ *
+ * 5. **Undo/Redo System** (undoStack, redoStack, canUndo, canRedo)
+ *    - Complete game state snapshots for time-travel
+ *    - Restore to any previous state
+ *
+ * 6. **Statistics** (gameStats, enhancedStats, currentLegStats)
+ *    - Real-time performance metrics
+ *    - Per-leg and per-game statistics
+ *
+ * 7. **Double-Start Tracking** (legStartStatus)
+ *    - Which players have hit starting double
+ *
+ * 8. **Actions Object** (scoringActions)
+ *    - All functions to manipulate game state
+ *    - Initialize, add darts, complete turns, undo/redo, complete legs
+ *
+ * 9. **UI Helper Stores**
+ *    - Display-ready versions of data
+ *    - Formatted strings for components
+ *
+ * KEY INSIGHTS:
+ * - Undo/redo works by saving complete snapshots (not deltas)
+ * - Statistics are calculated reactively as darts are thrown
+ * - Match can be paused and resumed via localStorage (not yet implemented)
+ * - Double-start rule is tracked per player per leg
+ * - Supports both single legs and best-of-X matches
+ *
+ * IDENTIFIED DUPLICATIONS:
+ * 1. dartsRemaining vs currentDartsRemaining vs dartsRemainingDisplay
+ * 2. Three different ways to calculate same value
+ * 3. Should be consolidated to single source of truth
+ *
+ * NEXT FILES TO ANNOTATE (Phase 1):
+ * - src/lib/types/scoring.ts - All TypeScript types used here
+ * - src/lib/components/MobileDartEntry.svelte - Main UI using these stores
+ * - src/lib/components/NumberGrid.svelte - Number pad for dart entry
+ * - src/lib/services/checkoutService.ts - Checkout calculations
+ * - src/lib/services/statisticsService.ts - Advanced statistics
+ */
