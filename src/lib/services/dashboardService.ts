@@ -191,7 +191,35 @@ export class DashboardService {
   }
   
   /**
-   * Get attendance records for a specific week
+   * GET WEEKLY ATTENDANCE
+   *
+   * PURPOSE:
+   * Fetches all attendance records for a specific week number
+   *
+   * PARAMETERS:
+   * - weekNumber: The week to fetch attendance for (e.g., 1, 2, 3...)
+   *
+   * RETURNS:
+   * Array of AttendanceRecord objects, each containing:
+   * - id, player_id, week_number, league_year, available, selected, created_at
+   * - player: Nested Player object from join
+   *
+   * DATABASE QUERY:
+   * SELECT attendance.*, players.*
+   * FROM attendance
+   * LEFT JOIN players ON attendance.player_id = players.id
+   * WHERE attendance.week_number = ?
+   *
+   * IMPORTANT NOTES:
+   * 1. This query does NOT filter by league_year anymore (was causing errors)
+   * 2. If multiple league years exist in DB, this will return ALL of them
+   * 3. PGRST116 = "No rows found" - this is EXPECTED if attendance not marked yet
+   * 4. The `player:players(*)` syntax creates a nested object join
+   *
+   * POTENTIAL ISSUES:
+   * - If there are duplicate attendance records (same player + week),
+   *   this will return ALL duplicates
+   * - No unique constraint prevents duplicates in the database
    */
   async getWeeklyAttendance(weekNumber: number): Promise<AttendanceRecord[]> {
     try {
@@ -219,7 +247,47 @@ export class DashboardService {
   }
   
   /**
-   * Save attendance records for multiple players
+   * SAVE ATTENDANCE (BULK UPSERT)
+   *
+   * PURPOSE:
+   * Saves or updates attendance records for multiple players
+   *
+   * PARAMETERS:
+   * - records: Array of partial AttendanceRecord objects
+   *   Expected structure: { player_id, week_number, league_year?, available, selected? }
+   *
+   * STRATEGY: UPSERT with conflict resolution
+   * - If record exists (matching player_id + week_number), UPDATE it
+   * - If record doesn't exist, INSERT it
+   *
+   * DATABASE OPERATION:
+   * INSERT INTO attendance (player_id, week_number, available, selected, league_year)
+   * VALUES (...), (...), (...)
+   * ON CONFLICT (player_id, week_number) DO UPDATE SET ...
+   *
+   * CRITICAL ISSUE:
+   * The onConflict clause references 'player_id,week_number' but the database
+   * might not have a unique constraint on just those two columns!
+   *
+   * ATTENDANCE TABLE CONSTRAINTS (from schema):
+   * - PRIMARY KEY (id)
+   * - FOREIGN KEY (player_id) REFERENCES players(id)
+   * - NO UNIQUE constraint on (player_id, week_number)
+   * - NO UNIQUE constraint on (player_id, week_number, league_year)
+   *
+   * THIS IS THE ROOT CAUSE OF THE ERROR!
+   * When onConflict references a constraint that doesn't exist, Supabase/PostgreSQL
+   * returns error PGRST204 "Invalid request format"
+   *
+   * RETRY LOGIC:
+   * Wraps the operation in retryDatabaseOperation() which:
+   * - Tries up to 3 times
+   * - Waits 1s, 2s, 4s between attempts
+   * - Only retries on network/timeout errors (not constraint violations)
+   *
+   * USED BY:
+   * - Currently NOT used by the attendance page (attendance page uses direct queries)
+   * - May be used by other parts of the app for bulk attendance saves
    */
   async saveAttendance(records: Partial<AttendanceRecord>[]): Promise<void> {
     try {
@@ -232,6 +300,11 @@ export class DashboardService {
         const { error } = await supabase
           .from('attendance')
           .upsert(records, {
+            // PROBLEM: This constraint doesn't exist!
+            // Need to either:
+            // 1. Create unique constraint: ALTER TABLE attendance ADD CONSTRAINT ...
+            // 2. Use different save strategy (delete-then-insert)
+            // 3. Remove this parameter entirely
             onConflict: 'player_id,week_number'
           });
 
