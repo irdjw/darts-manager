@@ -64,7 +64,7 @@ This index tracks all files that have been fully annotated with teaching-style d
 ## Components (UI) - 29 files
 
 ### Core Scoring Components
-- ❌ `src/lib/components/MobileDartEntry.svelte` - **CRITICAL** Main scoring interface
+- ✅ `src/lib/components/MobileDartEntry.svelte` - **CRITICAL** Main scoring interface (COMPLETE - 1444 lines)
 - ❌ `src/lib/components/NumberGrid.svelte` - Number pad for dart entry
 - ❌ `src/lib/components/GameCompleteModal.svelte` - End of game modal
 - ❌ `src/lib/components/DartVisualIndicators.svelte` - Visual dart display
