@@ -110,7 +110,7 @@ This index tracks all files that have been fully annotated with teaching-style d
 
 ## Stores (State Management) - 5 files
 
-- ❌ `src/lib/stores/scoringStores.ts` - **CRITICAL** Game scoring state
+- ✅ `src/lib/stores/scoringStores.ts` - **CRITICAL** Game scoring state (COMPLETE - 1555 lines fully annotated)
 - ❌ `src/lib/stores/auth.ts` - Authentication state
 - ❌ `src/lib/stores/dashboard.ts` - Dashboard data
 - ❌ `src/lib/stores/players.ts` - Player management
