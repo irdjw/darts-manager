@@ -19,8 +19,8 @@ This index tracks all files that have been fully annotated with teaching-style d
 - ❌ `package.json` - Dependencies and scripts
 
 ### Server & Authentication
-- ❌ `src/hooks.server.ts` - Request interceptor, auth middleware
-- ❌ `src/app.d.ts` - Global type declarations
+- ✅ `src/hooks.server.ts` - Request interceptor, auth middleware (COMPLETE)
+- ✅ `src/app.d.ts` - Global type declarations (COMPLETE)
 
 ---
 
@@ -41,7 +41,7 @@ This index tracks all files that have been fully annotated with teaching-style d
 
 ### Main Features
 - ✅ `src/routes/attendance/+page.svelte` - Mark player availability (COMPLETE)
-- ❌ `src/routes/dashboard/+page.svelte` - Main dashboard
+- ✅ `src/routes/dashboard/+page.svelte` - Main dashboard (COMPLETE)
 - ❌ `src/routes/statistics/+page.svelte` - Player statistics
 - ❌ `src/routes/scoring/[id]/+page.svelte` - Live scoring interface
 - ✅ `src/routes/team-selection/+page.svelte` - Team selection root (COMPLETE)
@@ -111,9 +111,9 @@ This index tracks all files that have been fully annotated with teaching-style d
 ## Stores (State Management) - 5 files
 
 - ✅ `src/lib/stores/scoringStores.ts` - **CRITICAL** Game scoring state (COMPLETE - 1555 lines fully annotated)
-- ❌ `src/lib/stores/auth.ts` - Authentication state
-- ❌ `src/lib/stores/dashboard.ts` - Dashboard data
-- ❌ `src/lib/stores/players.ts` - Player management
+- ✅ `src/lib/stores/auth.ts` - Authentication state (COMPLETE)
+- ✅ `src/lib/stores/dashboard.ts` - Dashboard data (COMPLETE)
+- ✅ `src/lib/stores/players.ts` - Player management (COMPLETE)
 - ✅ `src/lib/stores/teamManagement.ts` - Team selection (COMPLETE)
 
 ---
@@ -125,23 +125,23 @@ This index tracks all files that have been fully annotated with teaching-style d
 - ❌ `src/lib/services/dartTrackingService.ts` - Dart tracking
 - ❌ `src/lib/services/customMatchService.ts` - Custom match operations
 - ❌ `src/lib/services/personalGameService.ts` - Personal practice games
-- 📝 `src/lib/services/dashboardService.ts` - Dashboard data (PARTIALLY DONE)
+- ✅ `src/lib/services/dashboardService.ts` - Dashboard data (COMPLETE)
 
 ---
 
 ## Database Layer
 
 ### Core Database Files
-- ❌ `src/lib/database/supabase.ts` - Database connection
-- ❌ `src/lib/database/types.ts` - **IMPORTANT** All database types
-- ❌ `src/lib/database/errors.ts` - Error handling
+- ✅ `src/lib/database/supabase.ts` - Database connection (COMPLETE)
+- ✅ `src/lib/database/types.ts` - **IMPORTANT** All database types (COMPLETE)
+- ✅ `src/lib/database/errors.ts` - Error handling (COMPLETE)
 
 ### Database Services
-- ❌ `src/lib/database/services/players.ts` - Player CRUD
-- ❌ `src/lib/database/services/fixtures.ts` - Fixture CRUD
+- ✅ `src/lib/database/services/players.ts` - Player CRUD (COMPLETE)
+- ✅ `src/lib/database/services/fixtures.ts` - Fixture CRUD (COMPLETE)
 - ✅ `src/lib/database/services/games.ts` - Game result CRUD (COMPLETE)
 - ✅ `src/lib/database/services/attendance.ts` - Attendance CRUD (COMPLETE)
-- ❌ `src/lib/database/services/index.ts` - Service exports
+- ✅ `src/lib/database/services/index.ts` - Service exports (COMPLETE)
 
 ---
 
@@ -156,15 +156,15 @@ This index tracks all files that have been fully annotated with teaching-style d
 
 ## Utilities - 9 files
 
-- ❌ `src/lib/utils/supabase-browser.ts` - Browser Supabase client
-- ❌ `src/lib/utils/supabaseHealth.ts` - Database health checks
-- ❌ `src/lib/utils/cache.ts` - Client-side caching
-- ❌ `src/lib/utils/constants.ts` - Application constants
-- ❌ `src/lib/utils/formatting.ts` - Data formatting
-- ❌ `src/lib/utils/helpers.ts` - General helpers
-- ❌ `src/lib/utils/keyboard.ts` - Keyboard event handling
-- ❌ `src/lib/utils/performance.ts` - Performance monitoring
-- ❌ `src/lib/utils/pwa.ts` - PWA utilities
+- ✅ `src/lib/utils/supabase-browser.ts` - Browser Supabase client (COMPLETE)
+- ✅ `src/lib/utils/supabaseHealth.ts` - Database health checks (COMPLETE)
+- ✅ `src/lib/utils/cache.ts` - Client-side caching (COMPLETE)
+- ✅ `src/lib/utils/constants.ts` - Application constants (COMPLETE)
+- ✅ `src/lib/utils/formatting.ts` - Data formatting (COMPLETE)
+- ✅ `src/lib/utils/helpers.ts` - General helpers (COMPLETE)
+- ✅ `src/lib/utils/keyboard.ts` - Keyboard event handling (COMPLETE)
+- ✅ `src/lib/utils/performance.ts` - Performance monitoring (COMPLETE)
+- ✅ `src/lib/utils/pwa.ts` - PWA utilities (COMPLETE)
 
 ---
 
@@ -212,11 +212,11 @@ This index tracks all files that have been fully annotated with teaching-style d
 10. ✅ **Team selection pages** - All 4 UI pages annotated
 11. ✅ **`games.ts` database service** - Game result CRUD (Phase 1 completion)
 
-### Phase 3: Supporting Systems
-11. **Dashboard components** - Navigation
-12. **Authentication** - Login/logout
-13. **Database types** - All interfaces
-14. **Utilities** - Helper functions
+### Phase 3: Supporting Systems ✅ COMPLETE
+11. ✅ **Dashboard components** - Navigation
+12. ✅ **Authentication** - Login/logout
+13. ✅ **Database types** - All interfaces
+14. ✅ **Utilities** - All 9 utility files
 
 ### Phase 4: Everything Else
 15. **Remaining components**
@@ -257,7 +257,7 @@ This index tracks all files that have been fully annotated with teaching-style d
 
 ## Completed Phases
 
-### Phase 1: Core Scoring System ✅ COMPLETE
+### Phase 1: Core Scoring System ✅ COMPLETE (7 files)
 - scoringStores.ts (1555 lines)
 - scoring.ts types (689 lines)
 - MobileDartEntry.svelte (1444 lines)
@@ -266,7 +266,7 @@ This index tracks all files that have been fully annotated with teaching-style d
 - statisticsService.ts (645 lines)
 - games.ts database service
 
-### Phase 2: Team Management ✅ COMPLETE
+### Phase 2: Team Management ✅ COMPLETE (6 files)
 - attendance.ts database service
 - teamManagement.ts store
 - team/+page.svelte (captain dashboard, 4 tabs)
@@ -274,22 +274,38 @@ This index tracks all files that have been fully annotated with teaching-style d
 - team-selection/[week]/+page.svelte (dedicated selection)
 - attendance/+page.svelte (player availability marking)
 
+### Phase 3: Supporting Systems ✅ COMPLETE (20 files)
+**Stores (3):** auth.ts, players.ts, dashboard.ts
+**Core (2):** app.d.ts, hooks.server.ts
+**Database (6):** supabase.ts, types.ts, errors.ts, players.ts, fixtures.ts, index.ts
+**Services (1):** dashboardService.ts
+**Routes (1):** dashboard/+page.svelte
+**Utilities (9):** constants, formatting, helpers, cache, keyboard, performance, pwa, supabaseHealth, supabase-browser
+
 ## Next Steps
 
-### Phase 3: Supporting Systems (next priority)
-- Dashboard components and main dashboard page
-- Authentication (hooks.server.ts, login/logout)
-- Database types (types.ts)
-- DashboardService (partially annotated)
-- Utility functions
+### Phase 4: Everything Else (remaining ~50 files)
+- Remaining components (25 files): PlayerCard, MatchCard, StatsCard, LoginForm,
+  MobileNavigation, QuickActions, LoadingSpinner, ErrorAlert, ErrorBoundary, etc.
+- Route pages (16 files): statistics, scoring, match, custom-match, warmup,
+  login, logout, auth, admin (5 pages), offline, root layout
+- Server/layout logic (8 files): +page.server.ts files, +layout.ts/server.ts
+- Types (3 files): dashboard.ts, components.ts, customMatch.ts
+- Services (3 files): dartTrackingService, customMatchService, personalGameService
+- Configuration (5 files): svelte.config, vite.config, tailwind.config, tsconfig, package.json
+- Tests (3 files)
+- Static assets (2 files): manifest.json, service-worker.js
 
-### Phase 4: Everything Else
-- Remaining components (29 files)
-- Admin pages
-- Configuration files
-- Tests
-
-**Duplications flagged during annotation:**
+**Bugs & duplications flagged during annotation (all Phases):**
 - Attendance save: 3 different approaches (delete-then-insert, upsert, check-update-or-insert)
 - Player queries duplicated between PlayersService and DashboardService
 - league_year '2025/26' hardcoded in 10+ places
+- DashboardService exists in TWO files (src/lib/services/ and src/lib/stores/)
+- Error handling exists in TWO forms: handleDatabaseError() returns strings, DatabaseErrorHandler returns objects
+- Supabase clients: THREE instances (supabase.ts createClient, supabase-browser.ts createBrowserClient, hooks.server.ts createServerClient)
+- Health checks: TWO implementations (supabase.ts checkDatabaseHealth, supabaseHealth.ts SupabaseHealthCheck)
+- helpers.ts contains dead commented-out code block (lines 163–315) — SSR-unsafe duplicates
+- keyboard.ts stopListening() has a .bind() bug — listener is never actually removed
+- players.ts getAvailablePlayers() queries attendance table but types result as Player[]
+- players.ts updatePlayerStats() drop_week calculation always returns null
+- team-selection/[week]/+page.svelte saveTeamSelection() only console.logs — never persists
