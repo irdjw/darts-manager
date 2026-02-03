@@ -40,16 +40,16 @@ This index tracks all files that have been fully annotated with teaching-style d
 - ❌ `src/routes/logout/+page.svelte` - Logout handler
 
 ### Main Features
-- 📝 `src/routes/attendance/+page.svelte` - Mark player availability (PARTIALLY DONE)
+- ✅ `src/routes/attendance/+page.svelte` - Mark player availability (COMPLETE)
 - ❌ `src/routes/dashboard/+page.svelte` - Main dashboard
 - ❌ `src/routes/statistics/+page.svelte` - Player statistics
 - ❌ `src/routes/scoring/[id]/+page.svelte` - Live scoring interface
-- ❌ `src/routes/team-selection/+page.svelte` - Team selection root
-- ❌ `src/routes/team-selection/[week]/+page.svelte` - Weekly team selection
+- ✅ `src/routes/team-selection/+page.svelte` - Team selection root (COMPLETE)
+- ✅ `src/routes/team-selection/[week]/+page.svelte` - Weekly team selection (COMPLETE)
 - ❌ `src/routes/match/[id]/+page.svelte` - Match details
 - ❌ `src/routes/custom-match/+page.svelte` - Custom match setup
 - ❌ `src/routes/warmup/+page.svelte` - Warmup session
-- ❌ `src/routes/team/+page.svelte` - Team management
+- ✅ `src/routes/team/+page.svelte` - Team management (COMPLETE)
 - ❌ `src/routes/offline/+page.svelte` - Offline fallback
 
 ### Admin
@@ -114,14 +114,14 @@ This index tracks all files that have been fully annotated with teaching-style d
 - ❌ `src/lib/stores/auth.ts` - Authentication state
 - ❌ `src/lib/stores/dashboard.ts` - Dashboard data
 - ❌ `src/lib/stores/players.ts` - Player management
-- 📝 `src/lib/stores/teamManagement.ts` - Team selection (PARTIALLY DONE)
+- ✅ `src/lib/stores/teamManagement.ts` - Team selection (COMPLETE)
 
 ---
 
 ## Services (Business Logic) - 6 files
 
 - ✅ `src/lib/services/checkoutService.ts` - **CRITICAL** Checkout calculations (COMPLETE - 711 lines)
-- ❌ `src/lib/services/statisticsService.ts` - **CRITICAL** Statistics calculations
+- ✅ `src/lib/services/statisticsService.ts` - **CRITICAL** Statistics calculations (COMPLETE)
 - ❌ `src/lib/services/dartTrackingService.ts` - Dart tracking
 - ❌ `src/lib/services/customMatchService.ts` - Custom match operations
 - ❌ `src/lib/services/personalGameService.ts` - Personal practice games
@@ -139,8 +139,8 @@ This index tracks all files that have been fully annotated with teaching-style d
 ### Database Services
 - ❌ `src/lib/database/services/players.ts` - Player CRUD
 - ❌ `src/lib/database/services/fixtures.ts` - Fixture CRUD
-- ❌ `src/lib/database/services/games.ts` - Game result CRUD (NEWLY CREATED)
-- ❌ `src/lib/database/services/attendance.ts` - Attendance CRUD (NEWLY CREATED)
+- ✅ `src/lib/database/services/games.ts` - Game result CRUD (COMPLETE)
+- ✅ `src/lib/database/services/attendance.ts` - Attendance CRUD (COMPLETE)
 - ❌ `src/lib/database/services/index.ts` - Service exports
 
 ---
@@ -206,10 +206,11 @@ This index tracks all files that have been fully annotated with teaching-style d
 6. **`games.ts` database service** - Save results
 7. **Scoring types** - Data structures
 
-### Phase 2: Team Management
-8. **`attendance.ts` database service** - Attendance CRUD
-9. **`teamManagement.ts` store** - Selection logic
-10. **Team selection pages** - UI for selection
+### Phase 2: Team Management ✅ COMPLETE
+8. ✅ **`attendance.ts` database service** - Attendance CRUD
+9. ✅ **`teamManagement.ts` store** - Selection logic
+10. ✅ **Team selection pages** - All 4 UI pages annotated
+11. ✅ **`games.ts` database service** - Game result CRUD (Phase 1 completion)
 
 ### Phase 3: Supporting Systems
 11. **Dashboard components** - Navigation
@@ -254,20 +255,41 @@ This index tracks all files that have been fully annotated with teaching-style d
 
 ---
 
+## Completed Phases
+
+### Phase 1: Core Scoring System ✅ COMPLETE
+- scoringStores.ts (1555 lines)
+- scoring.ts types (689 lines)
+- MobileDartEntry.svelte (1444 lines)
+- NumberGrid.svelte (543 lines)
+- checkoutService.ts (711 lines)
+- statisticsService.ts (645 lines)
+- games.ts database service
+
+### Phase 2: Team Management ✅ COMPLETE
+- attendance.ts database service
+- teamManagement.ts store
+- team/+page.svelte (captain dashboard, 4 tabs)
+- team-selection/+page.svelte (auto-redirect router)
+- team-selection/[week]/+page.svelte (dedicated selection)
+- attendance/+page.svelte (player availability marking)
+
 ## Next Steps
 
-1. Continue systematic annotation starting with Phase 1
-2. Document all duplications as they're found
-3. Create flow diagrams for complex operations
-4. Add inline code examples
-5. Explain "why" not just "what"
+### Phase 3: Supporting Systems (next priority)
+- Dashboard components and main dashboard page
+- Authentication (hooks.server.ts, login/logout)
+- Database types (types.ts)
+- DashboardService (partially annotated)
+- Utility functions
 
-**Estimated Time:**
-- Phase 1 (Core): ~2-3 hours for thorough annotation
-- Phase 2 (Team): ~1-2 hours
-- Phase 3 (Supporting): ~2-3 hours
-- Phase 4 (Everything): ~3-4 hours
+### Phase 4: Everything Else
+- Remaining components (29 files)
+- Admin pages
+- Configuration files
+- Tests
 
-**Total: ~10-12 hours for complete documentation**
-
-Given the immediate need for tonight's game, should I focus on Phase 1 (Core Functionality) first?
+**Duplications flagged during annotation:**
+- Attendance save: 3 different approaches (delete-then-insert, upsert, check-update-or-insert)
+- Player queries duplicated between PlayersService and DashboardService
+- league_year '2025/26' hardcoded in 10+ places
